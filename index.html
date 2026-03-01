@@ -2,18 +2,16 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>הנוטאים - הרפתקת החידות</title>
+    <title>הנוטאים - אתגר הקירות</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #222; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { margin: 0; overflow: hidden; background: #222; font-family: sans-serif; }
         canvas { display: block; background: #1a1a2e; margin: auto; border: 5px solid #444; }
         #ui { position: absolute; top: 10px; right: 20px; color: gold; font-size: 24px; font-weight: bold; pointer-events: none; }
-        /* סגנון לחידה */
         #quiz-container {
             display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: white; padding: 20px; border-radius: 15px; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            background: white; padding: 20px; border-radius: 15px; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.5); z-index: 10;
         }
         button { padding: 10px 20px; margin: 10px; cursor: pointer; border-radius: 5px; border: none; background: #00d2ff; color: white; font-weight: bold; }
-        button:hover { background: #008cb1; }
     </style>
 </head>
 <body>
@@ -41,50 +39,53 @@
         const player = {
             x: 50, y: 500, width: 30, height: 30,
             color: '#00d2ff', xVel: 0, yVel: 0,
-            speed: 5, jumpForce: 12, gravity: 0.6,
-            grounded: false, onWall: false
+            speed: 5, jumpForce: 11, gravity: 0.5,
+            grounded: false, onWall: false, wallDir: 0
         };
 
         const keys = {};
 
-        // פלטפורמות (אפור)
+        // מפת השלבים: פלטפורמות וקירות
         const platforms = [
-            {x: 0, y: 580, w: 800, h: 20}, 
-            {x: 200, y: 450, w: 150, h: 20},
-            {x: 450, y: 350, w: 150, h: 20},
-            {x: 0, y: 250, w: 100, h: 20},
-            {x: 750, y: 150, w: 50, h: 400} // קיר לימין
+            {x: 0, y: 580, w: 800, h: 20},    // רצפה
+            {x: 0, y: 0, w: 20, h: 600},      // קיר שמאלי חוסם
+            {x: 780, y: 0, w: 20, h: 600},    // קיר ימני חוסם
+            
+            // קירות לקפיצה (באמצע)
+            {x: 150, y: 350, w: 30, h: 150}, 
+            {x: 300, y: 200, w: 30, h: 200},
+            {x: 450, y: 300, w: 30, h: 200},
+            
+            // פלטפורמות קטנות
+            {x: 500, y: 150, w: 100, h: 20},
+            {x: 650, y: 100, w: 100, h: 20},
+            {x: 50, y: 300, w: 60, h: 20}
         ];
 
-        // מכשולים - קוצים (אדום)
         const hazards = [
-            {x: 350, y: 560, w: 100, h: 20},
-            {x: 250, y: 430, w: 40, h: 20}
+            {x: 200, y: 565, w: 200, h: 15}, // קוצים על הרצפה
+            {x: 480, y: 280, w: 40, h: 10}   // מלכודת קטנה
         ];
 
-        // כוכבים (צהוב)
         const stars = [
-            {x: 275, y: 420, size: 8, collected: false},
-            {x: 525, y: 320, size: 8, collected: false},
-            {x: 50, y: 220, size: 8, collected: false}
+            {x: 70, y: 270, size: 8, collected: false},
+            {x: 315, y: 170, size: 8, collected: false},
+            {x: 550, y: 120, size: 8, collected: false}
         ];
 
-        // תיבת חידה (סגול עם סימן שאלה)
-        const quizBox = {x: 760, y: 120, w: 30, h: 30, active: true};
+        const quizBox = {x: 700, y: 60, w: 30, h: 30, active: true};
 
         const riddle = {
-            question: "מה יש לו הרבה מפתחות אבל לא יכול לפתוח אף מנעול?",
-            options: ["צרור מפתחות", "פסנתר", "מפה"],
-            correct: 1 // פסנתר
+            question: "מה עולה למעלה אבל אף פעם לא יורד?",
+            options: ["בלון", "הגיל שלך", "מטוס"],
+            correct: 1
         };
 
         window.addEventListener('keydown', e => keys[e.code] = true);
         window.addEventListener('keyup', e => keys[e.code] = false);
 
         function resetPlayer() {
-            player.x = 50;
-            player.y = 500;
-            player.yVel = 0;
+            player.x = 50; player.y = 500; player.yVel = 0; player.xVel = 0;
         }
 
         function showQuiz() {
@@ -93,22 +94,13 @@
             document.getElementById('quiz-question').innerText = riddle.question;
             const optionsDiv = document.getElementById('quiz-options');
             optionsDiv.innerHTML = '';
-            
             riddle.options.forEach((opt, index) => {
                 const btn = document.createElement('button');
                 btn.innerText = opt;
                 btn.onclick = () => {
-                    if (index === riddle.correct) {
-                        score += 5;
-                        scoreElement.innerText = score;
-                        alert("נכון מאוד! קיבלת 5 כוכבים!");
-                    } else {
-                        alert("טעות... נסה שוב בפעם הבאה.");
-                    }
-                    quizContainer.style.display = 'none';
-                    quizBox.active = false;
-                    gameActive = true;
-                    loop(); // מחזיר את הלופ לפעולה
+                    if (index === riddle.correct) { score += 10; scoreElement.innerText = score; alert("גאוני!"); }
+                    else { alert("לא נורא, נסה שוב!"); }
+                    quizContainer.style.display = 'none'; quizBox.active = false; gameActive = true; loop();
                 };
                 optionsDiv.appendChild(btn);
             });
@@ -128,44 +120,38 @@
             player.grounded = false;
             player.onWall = false;
 
-            // התנגשות פלטפורמות
             for (let plat of platforms) {
                 if (player.x < plat.x + plat.w && player.x + player.width > plat.x &&
                     player.y < plat.y + plat.h && player.y + player.height > plat.y) {
+                    
+                    // התנגשות מלמעלה (נחיתה)
                     if (player.y + player.height - player.yVel <= plat.y) {
                         player.y = plat.y - player.height;
                         player.yVel = 0;
                         player.grounded = true;
-                    } else {
+                    } 
+                    // התנגשות מהצדדים (קירות)
+                    else {
                         player.onWall = true;
-                        if (player.yVel > 2) player.yVel = 2;
+                        player.yVel = Math.min(player.yVel, 2); // החלקה
                     }
                 }
             }
 
-            // התנגשות עם קוצים (מוות)
             for (let hz of hazards) {
                 if (player.x < hz.x + hz.w && player.x + player.width > hz.x &&
-                    player.y < hz.y + hz.h && player.y + player.height > hz.y) {
-                    resetPlayer();
-                }
+                    player.y < hz.y + hz.h && player.y + player.height > hz.y) resetPlayer();
             }
 
-            // איסוף כוכבים
             for (let star of stars) {
                 if (!star.collected && player.x < star.x + star.size && player.x + player.width > star.x &&
                     player.y < star.y + star.size && player.y + player.height > star.y) {
-                    star.collected = true;
-                    score += 1;
-                    scoreElement.innerText = score;
+                    star.collected = true; score += 1; scoreElement.innerText = score;
                 }
             }
 
-            // נגיעה בתיבת חידה
             if (quizBox.active && player.x < quizBox.x + quizBox.w && player.x + player.width > quizBox.x &&
-                player.y < quizBox.y + quizBox.h && player.y + player.height > quizBox.y) {
-                showQuiz();
-            }
+                player.y < quizBox.y + quizBox.h && player.y + player.height > quizBox.y) showQuiz();
 
             if ((keys['Space'] || keys['ArrowUp'])) {
                 if (player.grounded) {
@@ -173,61 +159,32 @@
                     player.grounded = false;
                 } else if (player.onWall) {
                     player.yVel = -player.jumpForce;
-                    player.xVel = (player.xVel > 0) ? -10 : 10;
+                    player.xVel = (player.xVel > 0) ? -8 : 8; // קפיצה מהקיר לצד השני
                 }
             }
             
-            // גבולות מסך
-            if (player.x < 0) player.x = 0;
-            if (player.x > canvas.width - player.width) player.x = canvas.width - player.width;
+            if (player.y > canvas.height) resetPlayer();
         }
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // פלטפורמות
             ctx.fillStyle = '#4a4e69';
             for (let plat of platforms) ctx.fillRect(plat.x, plat.y, plat.w, plat.h);
-
-            // קוצים
             ctx.fillStyle = '#ff4d4d';
             for (let hz of hazards) ctx.fillRect(hz.x, hz.y, hz.w, hz.h);
-
-            // כוכבים
             ctx.fillStyle = 'gold';
             for (let star of stars) {
-                if (!star.collected) {
-                    ctx.beginPath();
-                    ctx.arc(star.x, star.y, star.size, 0, Math.PI*2);
-                    ctx.fill();
-                }
+                if (!star.collected) { ctx.beginPath(); ctx.arc(star.x, star.y, star.size, 0, Math.PI*2); ctx.fill(); }
             }
-
-            // תיבת חידה
             if (quizBox.active) {
-                ctx.fillStyle = '#9b59b6';
-                ctx.fillRect(quizBox.x, quizBox.y, quizBox.w, quizBox.h);
-                ctx.fillStyle = 'white';
-                ctx.font = '20px Arial';
-                ctx.fillText('?', quizBox.x + 10, quizBox.y + 22);
+                ctx.fillStyle = '#9b59b6'; ctx.fillRect(quizBox.x, quizBox.y, quizBox.w, quizBox.h);
+                ctx.fillStyle = 'white'; ctx.font = '20px Arial'; ctx.fillText('?', quizBox.x + 10, quizBox.y + 22);
             }
-
-            // שחקן
             ctx.fillStyle = player.color;
-            ctx.shadowBlur = 10;
-            ctx.shadowColor = player.color;
             ctx.fillRect(player.x, player.y, player.width, player.height);
-            ctx.shadowBlur = 0;
         }
 
-        function loop() {
-            if (gameActive) {
-                update();
-                draw();
-                requestAnimationFrame(loop);
-            }
-        }
-
+        function loop() { if (gameActive) { update(); draw(); requestAnimationFrame(loop); } }
         loop();
     </script>
 </body>
