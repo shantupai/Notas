@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>רשת המעשים הטובים</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Assistant:wght@300;400;700;800&display=swap');
+        body { font-family: 'Assistant', sans-serif; }
+        .user-icon { position: absolute; cursor: pointer; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .user-icon:hover { transform: scale(1.1) rotate(3deg); z-index: 10; filter: brightness(1.1); }
+        #modal { display: none; backdrop-filter: blur(12px); }
+        .action-card { background: white; border-radius: 1.5rem; overflow: hidden; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #f1f5f9; }
+        .img-content { width: 100%; height: auto; max-height: 400px; object-fit: cover; border-bottom: 1px solid #f1f5f9; }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen overflow-hidden">
+
+    <div class="pt-12 text-center">
+        <h1 class="text-4xl font-black text-indigo-900 drop-shadow-sm tracking-tight">רשת המעשים הטובים</h1>
+        <p id="status-msg" class="text-indigo-500 mt-2 text-lg italic">טוען את סיפורי הקהילה...</p>
+    </div>
+    
+    <div id="container" class="relative w-full h-[75vh]"></div>
+
+    <div id="modal" class="fixed inset-0 bg-indigo-950/40 flex items-center justify-center z-50 p-4" onclick="this.style.display='none'">
+        <div class="bg-white rounded-[2.5rem] shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden" onclick="event.stopPropagation()">
+            <div class="p-6 border-b flex justify-between items-center bg-white sticky top-0 z-10">
+                <h2 id="modalTitle" class="text-2xl font-black text-indigo-800"></h2>
+                <button onclick="document.getElementById('modal').style.display='none'" class="bg-slate-100 text-slate-400 hover:text-red-500 w-10 h-10 rounded-full font-bold transition-all">✕</button>
+            </div>
+            <div id="gallery" class="p-6 flex flex-col gap-8 overflow-y-auto bg-slate-50">
+                </div>
+        </div>
+    </div>
+
+    <script>
+        const USER = 'shantupai'; 
+        const REPO = 'personalaccounts';
+
+        // פונקציה לניקוי טקסט מלינקים של Markdown כדי להציג רק את המלל
+        function cleanDescription(text) {
+            if (!text) return "";
+            // מסיר את הקישורים לתמונות מהטקסט שמוצג למשתמש
+            return text.replace(/!\[.*?\]\(.*?\)/g, '').replace(/https?:\/\/[^\s\)]+/g, '').trim();
+        }
+
+        function extractImages(text) {
+            if (!text) return [];
+            const regex = /(https?:\/\/[^\s\)]+(?:user-attachments|assets|user-images)[^\s\)]+)/gi;
+            const matches = text.match(regex);
+            return matches ? matches.map(url => url.replace(/[()\[\]]/g, '').split('?')[0]) : [];
+        }
+
+        async function loadApp() {
+            try {
+                const res = await fetch(`https://api.github.com/repos/${USER}/${REPO}/issues?state=all&t=${Date.now()}`);
+                const issues = await res.json();
+                
+                if (issues.length > 0) document.getElementById('status-msg').innerText = "לחצו על חשבון לצפייה ביומן המעשים";
+
+                issues.forEach(issue => {
+                    const bubble = document.createElement('div');
+                    bubble.className = 'user-icon w-24 h-24 bg-gradient-to-tr from-indigo-600 to-purple-500 text-white rounded-full flex items-center justify-center text-2xl font-black shadow-2xl border-4 border-white';
+                    bubble.innerText = issue.title.charAt(0).toUpperCase();
+                    bubble.style.left = Math.random() * 70 + 10 + '%';
+                    bubble.style.top = Math.random() * 60 + 10 + '%';
+                    bubble.onclick = () => showGallery(issue);
+                    document.getElementById('container').appendChild(bubble);
+                });
+            } catch (e) { document.getElementById('status-msg').innerText = "שגיאה בטעינה"; }
+        }
+
+        async function showGallery(issue) {
+            const modal = document.getElementById('modal');
+            const gallery = document.getElementById('gallery');
+            document.getElementById('modalTitle').innerText = `המעשים של ${issue.title}`;
+            gallery.innerHTML = '<div class="text-center py-10 text-indigo-400 animate-pulse font-bold">אוסף נתונים...</div>';
+            modal.style.display = 'flex';
+
+            try {
+                let actions = [];
+
+                // 1. הוספת המעשה מהתיאור הראשי
+                const bodyImgs = extractImages(issue.body);
+                if (bodyImgs.length > 0) {
+                    actions.push({ text: cleanDescription(issue.body), img: bodyImgs[0] });
+                }
+
+                // 2. הוספת מעשים מהתגובות
+                const res = await fetch(issue.comments_url);
+                const comments = await res.json();
+                comments.forEach(c => {
+                    const imgs = extractImages(c.body);
+                    if (imgs.length > 0) {
+                        actions.push({ text: cleanDescription(c.body), img: imgs[0] });
+                    }
+                });
+
+                gallery.innerHTML = '';
+                if (actions.length === 0) {
+                    gallery.innerHTML = '<div class="text-center py-20 text-slate-400 italic">לא נמצאו פעולות מתועדות.</div>';
+                } else {
+                    actions.forEach(action => {
+                        const card = document.createElement('div');
+                        card.className = 'action-card';
+                        
+                        let html = `<img src="${action.img}" class="img-content" onerror="this.style.display='none'">`;
+                        if (action.text) {
+                            html += `<div class="p-5 text-slate-700 font-medium text-lg leading-relaxed">${action.text}</div>`;
+                        }
+                        
+                        card.innerHTML = html;
+                        gallery.appendChild(card);
+                    });
+                }
+            } catch (e) { gallery.innerHTML = 'שגיאה בטעינה.'; }
+        }
+        loadApp();
+    </script>
+</body>
+</html>
