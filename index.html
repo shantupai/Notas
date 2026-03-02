@@ -20,7 +20,217 @@
 
 <script>
     const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>הנוטאים - אתגר איסוף הכוכבים</title>
+    <style>
+        body { margin: 0; background: #020617; overflow: hidden; font-family: sans-serif; }
+        canvas { display: block; margin: 0 auto; background: #020617; }
+        #stats { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-around; color: white; font-size: 20px; font-weight: bold; pointer-events: none; text-shadow: 2px 2px 4px #000; }
+        .hint { position: absolute; bottom: 10px; width: 100%; text-align: center; color: #94a3b8; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <div id="stats">
+        <div>🚀 שלב: <span id="lvl">1</span></div>
+        <div>❤️ חיים: <span id="hp">3</span></div>
+        <div>✨ כוכבים: <span id="sc">0</span></div>
+    </div>
+    <div class="hint">זוז עם החצים | קפוץ עם רווח | **אסוף כוכבים כדי להעלים חייזרים!**</div>
+    <canvas id="game"></canvas>
+
+<script>
+    const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
+    canvas.width = 1100; canvas.height = 550;
+
+    let level = 1, score = 0, health = 3, frames = 0;
+    let player = { x: 50, y: 400, w: 25, h: 25, xv: 0, yv: 0, jumps: 0, invul: 0 };
+    let platforms = [], aliens = [], stars = [], particles = [], door = {};
+    let keys = {};
+
+    function setupLevel() {
+        platforms = []; aliens = []; stars = []; particles = [];
+        player.x = 50; player.y = 450; player.xv = 0; player.yv = 0;
+        
+        // רצפה בסיסית
+        platforms.push({ x: 0, y: 520, w: 1100, h: 30 });
+
+        // המון מדרגות ופלטפורמות (מבנה של "מבוך קפיצות")
+        for(let i=0; i<25; i++) {
+            platforms.push({
+                x: 100 + Math.random() * 900,
+                y: 100 + Math.random() * 350,
+                w: 60 + Math.random() * 60,
+                h: 12
+            });
+        }
+
+        // המון חייזרים מרחפים (אין להם רובים, הם רק נוגעים)
+        let alienCount = 10 + (level * 2); 
+        for(let i=0; i < alienCount; i++) {
+            aliens.push({
+                x: 200 + Math.random() * 850,
+                y: 50 + Math.random() * 400,
+                baseY: 0, floatSpeed: 0.02 + Math.random() * 0.05,
+                floatDist: 20 + Math.random() * 50, alive: true
+            });
+            aliens[i].baseY = aliens[i].y;
+        }
+
+        // כוכבים שאוספים כדי להעלים חייזרים
+        for(let i=0; i<6; i++) {
+            stars.push({ x: 150 + Math.random()*850, y: 50 + Math.random()*400, collected: false });
+        }
+
+        // דלת יציאה במיקום גבוה
+        let highPlat = platforms[Math.floor(Math.random() * platforms.length)];
+        door = { x: highPlat.x, y: highPlat.y - 60, w: 40, h: 60 };
+
+        document.getElementById('lvl').innerText = level;
+    }
+
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    function createExplosion(x, y, color) {
+        for(let i=0; i<15; i++) {
+            particles.push({
+                x: x, y: y, 
+                xv: (Math.random()-0.5)*12, 
+                yv: (Math.random()-0.5)*12, 
+                life: 25, color: color
+            });
+        }
+    }
+
+    function update() {
+        frames++;
+        if(player.invul > 0) player.invul--;
+
+        // שליטה הדוקה - נעצר כשעוזבים מקש
+        player.xv = 0;
+        if(keys.ArrowRight) player.xv = 6;
+        if(keys.ArrowLeft) player.xv = -6;
+
+        // קפיצה
+        if((keys.Space || keys.ArrowUp) && player.jumps < 2 && !player.jumpLock) {
+            player.yv = -11; player.jumps++; player.jumpLock = true;
+        }
+        if(!keys.Space && !keys.ArrowUp) player.jumpLock = false;
+
+        player.yv += 0.55;
+        player.x += player.xv; player.y += player.yv;
+
+        // התנגשות פלטפורמות
+        platforms.forEach(p => {
+            if(player.x < p.x+p.w && player.x+player.w > p.x && 
+               player.y+player.h > p.y && player.y+player.h < p.y+p.h+10 && player.yv >= 0) {
+                player.y = p.y - player.h; player.yv = 0; player.jumps = 0;
+            }
+        });
+
+        // איסוף כוכבים - מעלים חייזר
+        stars.forEach(s => {
+            if(!s.collected && Math.abs(player.x - s.x) < 30 && Math.abs(player.y - s.y) < 30) {
+                s.collected = true;
+                score += 50;
+                // מציאת החייזר החי הראשון והשמדתו
+                for(let a of aliens) {
+                    if(a.alive) {
+                        a.alive = false;
+                        createExplosion(a.x+15, a.y+15, "#f59e0b");
+                        break;
+                    }
+                }
+            }
+        });
+
+        // עדכון חייזרים - ריחוף והתנגשות
+        aliens.forEach(a => {
+            if(!a.alive) return;
+            a.y = a.baseY + Math.sin(frames * a.floatSpeed) * a.floatDist;
+            
+            // אם חייזר נוגע בשחקן
+            if(player.invul <= 0 && Math.abs(player.x - a.x) < 25 && Math.abs(player.y - a.y) < 25) {
+                health--;
+                player.invul = 80;
+                createExplosion(player.x+12, player.y+12, "#ef4444");
+                if(health <= 0) { alert("החייזרים תפסו אותך!"); level=1; health=3; score=0; setupLevel(); }
+            }
+        });
+
+        // חלקיקים
+        particles.forEach((p, i) => {
+            p.x += p.xv; p.y += p.yv; p.life--;
+            if(p.life <= 0) particles.splice(i, 1);
+        });
+
+        // יציאה מהשלב
+        if(Math.abs(player.x - door.x) < 40 && Math.abs(player.y - door.y) < 50) {
+            level++; setupLevel();
+        }
+
+        // נפילה מהמסך
+        if(player.y > 600) { health--; setupLevel(); }
+        
+        document.getElementById('sc').innerText = score;
+        document.getElementById('hp').innerText = health;
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // פלטפורמות (מדרגות)
+        ctx.fillStyle = "#334155";
+        platforms.forEach(p => {
+            ctx.fillRect(p.x, p.y, p.w, p.h);
+            ctx.fillStyle = "#4ade80"; ctx.fillRect(p.x, p.y, p.w, 3); ctx.fillStyle = "#334155";
+        });
+
+        // כוכבים
+        stars.forEach(s => {
+            if(!s.collected) {
+                ctx.fillStyle = "#fbbf24";
+                ctx.shadowBlur = 15; ctx.shadowColor = "yellow";
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, 10, 0, Math.PI*2);
+                ctx.fill();
+                ctx.shadowBlur = 0;
+            }
+        });
+
+        // דלת
+        ctx.fillStyle = "#8b5cf6"; ctx.fillRect(door.x, door.y, door.w, door.h);
+        ctx.fillStyle = "white"; ctx.fillText("יציאה", door.x, door.y - 5);
+
+        // שחקן
+        ctx.fillStyle = (player.invul > 0 && frames % 10 < 5) ? "#94a3b8" : "#38bdf8";
+        ctx.fillRect(player.x, player.y, player.w, player.h);
+
+        // חייזרים (נראים כמו עיניים מרחפות ומפחידות)
+        aliens.forEach(a => {
+            if(!a.alive) return;
+            ctx.fillStyle = "#f43f5e";
+            ctx.beginPath(); ctx.ellipse(a.x+15, a.y+15, 15, 10, 0, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = "white";
+            ctx.beginPath(); ctx.arc(a.x+15, a.y+15, 5, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = "black";
+            ctx.beginPath(); ctx.arc(a.x+15, a.y+15, 2, 0, Math.PI*2); ctx.fill();
+        });
+
+        // פיצוצים
+        particles.forEach(p => { ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, 3, 3); });
+    }
+
+    function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
+    setupLevel();
+    gameLoop();
+</script>
+</body>
+</html>
     canvas.width = 1000; canvas.height = 500;
 
     let level = 1, score = 0, health = 3, frames = 0;
