@@ -1,35 +1,135 @@
 <!DOCTYPE html>
-<html>
+<html lang="he" dir="rtl">
 <head>
-    <title>בדיקת הנוטאים</title>
+    <meta charset="UTF-8">
+    <title>הנוטאים - 50 השלבים</title>
     <style>
-        body { background: black; color: white; text-align: center; font-family: sans-serif; }
-        canvas { background: #111; border: 2px solid white; }
+        body { margin: 0; background: #020617; color: white; font-family: sans-serif; overflow: hidden; }
+        canvas { display: block; background: #0f172a; margin: 20px auto; border: 3px solid #334155; }
+        #ui { text-align: center; font-size: 20px; margin-top: 10px; }
+        #quiz { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+                background: white; color: black; padding: 20px; border-radius: 15px; text-align: center; z-index: 10; }
+        button { padding: 10px; margin: 5px; cursor: pointer; background: #3b82f6; color: white; border: none; border-radius: 5px; }
     </style>
 </head>
 <body>
-    <h1>אם אתם רואים את זה - האתר עובד!</h1>
-    <p>השתמשו בחצים כדי להזיז את הריבוע הכחול</p>
-    <canvas id="c" width="400" height="400"></canvas>
-    <script>
-        const canvas = document.getElementById('c');
-        const ctx = canvas.getContext('2d');
-        let x = 50, y = 50;
-        
-        function draw() {
-            ctx.clearRect(0,0,400,400);
-            ctx.fillStyle = 'dodgerblue';
-            ctx.fillRect(x, y, 30, 30);
-            requestAnimationFrame(draw);
+    <div id="ui">שלב: <span id="lvl">1</span>/50 | כוכבים: <span id="sc">0</span></div>
+    <div id="quiz"><h2 id="q"></h2><div id="opts"></div></div>
+    <canvas id="g"></canvas>
+
+<script>
+    const canvas = document.getElementById('g'), ctx = canvas.getContext('2d');
+    canvas.width = 800; canvas.height = 500;
+
+    let level = 0, score = 0, gameActive = true, lasersOn = true;
+    const player = { x: 50, y: 400, w: 25, h: 25, xv: 0, yv: 0, speed: 4, jump: 10, grav: 0.5 };
+    const keys = {};
+
+    const riddles = [
+        { q: "מה עולה ולא יורד?", o: ["בלון", "גיל", "מטוס"], c: 1 },
+        { q: "מפתחות ללא מנעול?", o: ["פסנתר", "מפה", "ספר"], c: 0 },
+        { q: "מה רץ בלי רגליים?", o: ["רוח", "מים", "זמן"], c: 1 }
+    ];
+
+    // יצירת 50 שלבים רזים
+    const levels = [];
+    for (let i = 0; i < 50; i++) {
+        levels.push({
+            plats: [
+                {x: 0, y: 480, w: 800, h: 20}, // רצפה
+                {x: 150 + (i*5)%300, y: 350, w: 100, h: 15},
+                {x: 400, y: 150, w: 20, h: 300}, // קיר קפיצה
+                {x: 550, y: 250, w: 100, h: 15}
+            ],
+            alien: { x: 200, y: 455, r: 100 + (i*5), s: 2 + (i/10), curX: 200, d: 1 },
+            laser: i % 2 === 0 ? { x: 500 } : null,
+            btn: i % 2 === 0 ? { x: 160, y: 340, w: 20, h: 10, p: false } : null,
+            door: { x: 730, y: 400, w: 40, h: 80 }
+        });
+    }
+
+    window.onkeydown = e => keys[e.code] = true;
+    window.onkeyup = e => keys[e.code] = false;
+
+    function reset() {
+        player.x = 50; player.y = 400; player.xv = 0; player.yv = 0;
+        lasersOn = true;
+        if (levels[level].btn) levels[level].btn.p = false;
+    }
+
+    function win() {
+        gameActive = false;
+        const r = riddles[level % riddles.length];
+        document.getElementById('quiz').style.display = 'block';
+        document.getElementById('q').innerText = r.q;
+        const div = document.getElementById('opts'); div.innerHTML = '';
+        r.o.forEach((opt, i) => {
+            const b = document.createElement('button'); b.innerText = opt;
+            b.onclick = () => {
+                if(i === r.c) score += 10;
+                document.getElementById('quiz').style.display = 'none';
+                level++;
+                if(level >= 50) { alert("ניצחתם את כל המשחק!"); level = 0; }
+                document.getElementById('lvl').innerText = level + 1;
+                reset(); gameActive = true; loop();
+            };
+            div.appendChild(b);
+        });
+    }
+
+    function update() {
+        if (!gameActive) return;
+        const l = levels[level];
+
+        if (keys.ArrowRight) player.xv = player.speed;
+        else if (keys.ArrowLeft) player.xv = -player.speed;
+        else player.xv *= 0.8;
+
+        player.yv += player.grav;
+        player.x += player.xv; player.y += player.yv;
+
+        let ground = false, wall = false;
+        l.plats.forEach(p => {
+            if (player.x < p.x + p.w && player.x + player.w > p.x && player.y < p.y + p.h && player.y + player.h > p.y) {
+                if (player.y + player.h - player.yv <= p.y) { player.y = p.y - player.h; player.yv = 0; ground = true; }
+                else { wall = true; player.yv = Math.min(player.yv, 2); }
+            }
+        });
+
+        if (keys.Space && (ground || wall)) {
+            player.yv = -player.jump;
+            if (wall && !ground) player.xv = player.xv > 0 ? -8 : 8;
         }
-        
-        window.onkeydown = (e) => {
-            if(e.key == "ArrowRight") x += 10;
-            if(e.key == "ArrowLeft") x -= 10;
-            if(e.key == "ArrowUp") y -= 10;
-            if(e.key == "ArrowDown") y += 10;
-        };
-        draw();
-    </script>
+
+        if (l.btn && player.x < l.btn.x + l.btn.w && player.x + player.w > l.btn.x && player.y < l.btn.y + l.btn.h && player.y + player.h > l.btn.y) {
+            l.btn.p = true; lasersOn = false;
+        }
+
+        if (lasersOn && l.laser && player.x + player.w > l.laser.x && player.x < l.laser.x + 5) reset();
+
+        const a = l.alien;
+        a.curX += a.s * a.d;
+        if (Math.abs(a.curX - a.x) > a.r) a.d *= -1;
+        if (player.x < a.curX + 25 && player.x + player.w > a.curX && player.y < a.y + 25 && player.y + player.h > a.y) reset();
+
+        if (player.x < l.door.x + l.door.w && player.x + player.w > l.door.x && player.y < l.door.y + l.door.h && player.y + player.h > l.door.y) win();
+        if (player.y > canvas.height) reset();
+    }
+
+    function draw() {
+        const l = levels[level];
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#475569"; l.plats.forEach(p => ctx.fillRect(p.x, p.y, p.w, p.h));
+        ctx.fillStyle = "#10b981"; ctx.fillRect(l.door.x, l.door.y, l.door.w, l.door.h);
+        if (l.btn) { ctx.fillStyle = l.btn.p ? "#22c55e" : "#ef4444"; ctx.fillRect(l.btn.x, l.btn.y, l.btn.w, l.btn.h); }
+        if (lasersOn && l.laser) { ctx.fillStyle = "#f43f5e"; ctx.fillRect(l.laser.x, 0, 4, 500); }
+        ctx.fillStyle = "#a855f7"; ctx.beginPath(); ctx.arc(l.alien.curX + 12, l.alien.y + 12, 12, 0, 7); ctx.fill();
+        ctx.fillStyle = "#00d2ff"; ctx.fillRect(player.x, player.y, player.w, player.h);
+        document.getElementById('sc').innerText = score;
+    }
+
+    function loop() { if (gameActive) { update(); draw(); requestAnimationFrame(loop); } }
+    loop();
+</script>
 </body>
 </html>
