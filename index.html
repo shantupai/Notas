@@ -2,206 +2,170 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>הנוטאים - הגיגה בוס הגדול</title>
+    <title>הנוטאים - קרב הגיגה בוס</title>
     <style>
-        body { margin: 0; background: #020617; color: white; font-family: system-ui; overflow: hidden; }
-        canvas { display: block; margin: 0 auto; background: #0f172a; border-bottom: 6px solid #1e40af; }
-        #ui { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-around; font-size: 26px; font-weight: bold; pointer-events: none; text-shadow: 3px 3px 5px #000; }
-        #boss-container { position: absolute; top: 50px; left: 50%; transform: translateX(-50%); width: 400px; display: none; text-align: center; }
-        #hp-bar { width: 100%; height: 20px; background: #444; border: 2px solid white; border-radius: 10px; overflow: hidden; margin-top: 5px; }
-        #hp-fill { width: 100%; height: 100%; background: linear-gradient(90deg, #ff0000, #ff6b6b); transition: 0.1s; }
+        body { margin: 0; background: #000; color: white; font-family: sans-serif; overflow: hidden; text-align: center; }
+        canvas { display: block; background: #111; margin: 0 auto; border-bottom: 5px solid #007bff; cursor: crosshair; }
+        #ui { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-around; font-size: 20px; z-index: 5; pointer-events: none; }
+        #boss-hp { display: none; color: red; font-weight: bold; }
     </style>
 </head>
 <body>
     <div id="ui">
         <div>🚀 שלב: <span id="lvl">1</span></div>
+        <div id="boss-hp">👿 בוס: <span id="bhp">100</span>%</div>
         <div>✨ כוכבים: <span id="sc">0</span></div>
     </div>
-
-    <div id="boss-container">
-        <div style="color: #ff4444; font-size: 20px; font-weight: bold;">👿 ג'יגה-בוס חייזרי 👿</div>
-        <div id="hp-bar"><div id="hp-fill"></div></div>
-    </div>
-
     <canvas id="g"></canvas>
 
 <script>
-    const canvas = document.getElementById('g'), ctx = canvas.getContext('2d');
-    canvas.width = 1100; canvas.height = 600;
+    // הגדרות בסיסיות
+    const canvas = document.getElementById('g');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 1000;
+    canvas.height = 500;
 
-    let level = 1, score = 0, bullets = [], lastDir = 1, jumps = 0;
-    let currentLevelData = null;
-    
-    const player = { x: 50, y: 500, w: 35, h: 35, xv: 0, yv: 0, speed: 7, jump: 13, grav: 0.6 };
-    const keys = {};
+    let level = 1, score = 0, gameActive = true;
+    let player = { x: 50, y: 400, w: 30, h: 30, xv: 0, yv: 0, jump: 12, speed: 6, jumps: 0 };
+    let bullets = [], aliens = [], platforms = [], boss = null;
+    let keys = {};
+    let lastDir = 1;
 
-    function createLevel(n) {
-        const isBoss = n % 10 === 0;
-        const bossUI = document.getElementById('boss-container');
-        bossUI.style.display = isBoss ? 'block' : 'none';
-        if(isBoss) document.getElementById('hp-fill').style.width = '100%';
-        
-        bullets = [];
-        let data = {
-            isBoss: isBoss, bossHp: 500, maxBossHp: 500,
-            plats: [
-                {x: 0, y: 550, w: 1100, h: 50}, // רצפה
-                {x: 250, y: 450, w: 160, h: 25},
-                {x: 500, y: 350, w: 160, h: 25},
-                {x: 750, y: 250, w: 160, h: 25},
-                {x: 450, y: 150, w: 160, h: 25}
-            ],
-            aliens: [],
-            door: { x: 1000, y: 470, w: 70, h: 80 }
-        };
+    // יצירת שלב
+    function initLevel(n) {
+        platforms = [{ x: 0, y: 460, w: 1000, h: 40 }]; // רצפה
+        aliens = [];
+        boss = null;
+        document.getElementById('boss-hp').style.display = 'none';
 
-        if (isBoss) {
-            // בוס ענק באמת!
-            data.boss = { x: 700, y: 100, w: 250, h: 250, s: 3 };
-            data.plats = [{x: 0, y: 550, w: 1100, h: 50}, {x: 100, y: 350, w: 200, h: 25}, {x: 450, y: 350, w: 200, h: 25}];
+        if (n % 10 === 0) { // שלב בוס
+            document.getElementById('boss-hp').style.display = 'block';
+            boss = { x: 600, y: 100, w: 250, h: 250, hp: 500, maxHp: 500, s: 3 };
+            platforms.push({ x: 100, y: 300, w: 200, h: 20 });
         } else {
-            // חייזרים בשלבים רגילים
-            for(let i=0; i < Math.min(n, 5); i++) {
-                data.aliens.push({x: 300 + (i*150), y: 515, curX: 0, r: 100, s: 2.5, d: 1, alive: true});
+            // מדרגות קלות
+            for(let i=0; i<5; i++) {
+                platforms.push({ x: 200 + i*150, y: 380 - i*50, w: 120, h: 20 });
             }
-            data.aliens.forEach(a => a.curX = a.x);
+            // חייזרים
+            for(let i=0; i<Math.min(n, 4); i++) {
+                aliens.push({ x: 300 + i*150, y: 430, curX: 300 + i*150, range: 100, s: 2, d: 1 });
+            }
         }
-        return data;
     }
 
-    currentLevelData = createLevel(level);
-
-    window.onkeydown = e => { 
+    // שליטה
+    window.onkeydown = e => {
         keys[e.code] = true;
-        if ((e.code === 'Space' || e.code === 'ArrowUp') && jumps < 2) {
+        if ((e.code === 'Space' || e.code === 'ArrowUp') && player.jumps < 2) {
             player.yv = -player.jump;
-            jumps++;
+            player.jumps++;
+        }
+        if (e.code === 'KeyF') {
+            bullets.push({ x: player.x + 15, y: player.y + 15, xv: 15 * lastDir });
         }
     };
     window.onkeyup = e => keys[e.code] = false;
 
     function reset() {
-        player.x = 50; player.y = 500; player.xv = 0; player.yv = 0; jumps = 0;
-        currentLevelData = createLevel(level);
+        player.x = 50; player.y = 400; player.xv = 0; player.yv = 0; player.jumps = 0;
+        initLevel(level);
     }
 
     function update() {
-        const l = currentLevelData;
         if(keys.ArrowRight) { player.xv = player.speed; lastDir = 1; }
         else if(keys.ArrowLeft) { player.xv = -player.speed; lastDir = -1; }
-        else player.xv *= 0.85;
+        else player.xv *= 0.8;
 
-        player.yv += player.grav;
-        player.x += player.xv; player.y += player.yv;
+        player.yv += 0.6; // גרביטציה
+        player.x += player.xv;
+        player.y += player.yv;
 
-        // התנגשות פלטפורמות
-        l.plats.forEach(p => {
-            if(player.x < p.x+p.w && player.x+player.w > p.x && player.y < p.y+p.h && player.y+player.h > p.y) {
-                if(player.yv > 0 && player.y + player.h - player.yv <= p.y) {
-                    player.y = p.y - player.h; player.yv = 0; jumps = 0;
+        // התנגשות בפלטפורמות
+        platforms.forEach(p => {
+            if (player.x < p.x + p.w && player.x + player.w > p.x && player.y < p.y + p.h && player.y + player.h > p.y) {
+                if (player.yv > 0) {
+                    player.y = p.y - player.h;
+                    player.yv = 0;
+                    player.jumps = 0;
                 }
             }
         });
 
-        // יריות מהירות (F)
-        if(keys.KeyF && Math.random() > 0.7) {
-            bullets.push({x: player.x + (lastDir === 1 ? 35 : -10), y: player.y + 15, xv: 18 * lastDir, alive: true});
-        }
-
-        bullets.forEach(b => {
-            if(!b.alive) return;
+        // יריות
+        bullets.forEach((b, bi) => {
             b.x += b.xv;
-            l.aliens.forEach(a => {
-                if(a.alive && b.x > a.curX && b.x < a.curX+35 && b.y > a.y && b.y < a.y+35) {
-                    a.alive = false; b.alive = false; score += 25;
+            if (boss && b.x > boss.x && b.x < boss.x + boss.w && b.y > boss.y && b.y < boss.y + boss.h) {
+                boss.hp -= 10;
+                bullets.splice(bi, 1);
+                document.getElementById('bhp').innerText = Math.ceil((boss.hp/boss.maxHp)*100);
+                if(boss.hp <= 0) { level++; score += 500; reset(); }
+            }
+            aliens.forEach((a, ai) => {
+                if (b.x > a.curX && b.x < a.curX + 30 && b.y > a.y && b.y < a.y + 30) {
+                    aliens.splice(ai, 1);
+                    bullets.splice(bi, 1);
+                    score += 50;
                 }
             });
-            if(l.isBoss && b.x > l.boss.x && b.x < l.boss.x+l.boss.w && b.y > l.boss.y && b.y < l.boss.y+l.boss.h) {
-                l.bossHp -= 5; b.alive = false;
-                let hpPercent = (l.bossHp / l.maxBossHp) * 100;
-                document.getElementById('hp-fill').style.width = hpPercent + '%';
-                if(l.bossHp <= 0) { level++; score += 500; reset(); document.getElementById('lvl').innerText = level; }
-            }
         });
 
-        // חייזרים רגילים
-        l.aliens.forEach(a => {
-            if(!a.alive) return;
+        // חייזרים
+        aliens.forEach(a => {
             a.curX += a.s * a.d;
-            if(Math.abs(a.curX - a.x) > a.r) a.d *= -1;
-            if(player.x < a.curX+30 && player.x+player.w > a.curX && player.y < a.y+30 && player.y+player.h > a.y) reset();
+            if(Math.abs(a.curX - a.x) > a.range) a.d *= -1;
+            if(player.x < a.curX + 30 && player.x + player.w > a.curX && player.y < a.y + 30 && player.y + player.h > a.y) reset();
         });
 
-        // ניצחון שלב או בוס
-        if(!l.isBoss) {
-            if(player.x > l.door.x - 10 && player.y > l.door.y - 50) { level++; score += 100; reset(); document.getElementById('lvl').innerText = level; }
+        // בוס
+        if(boss) {
+            boss.x += boss.s;
+            if(boss.x > 750 || boss.x < 50) boss.s *= -1;
+            if(player.x < boss.x + boss.w && player.x + player.w > boss.x && player.y < boss.y + boss.h && player.y + player.h > boss.y) reset();
         } else {
-            l.boss.x += l.boss.s; if(l.boss.x > 850 || l.boss.x < 50) l.boss.s *= -1;
-            if(player.x < l.boss.x+l.boss.w && player.x+player.w > l.boss.x && player.y < l.boss.y+l.boss.h && player.y+player.h > l.boss.y) reset();
+            if(player.x > 950) { level++; score += 100; reset(); }
         }
 
-        if(player.y > 650) reset();
-        if(player.x < 0) player.x = 0;
-        if(player.x > 1065) player.x = 1065;
-    }
-
-    function draw() {
-        const l = currentLevelData;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        
-        // פלטפורמות
-        ctx.fillStyle = "#334155";
-        l.plats.forEach(p => {
-            ctx.fillRect(p.x, p.y, p.w, p.h);
-            ctx.fillStyle = "#475569"; ctx.fillRect(p.x, p.y, p.w, 5); ctx.fillStyle = "#334155";
-        });
-
-        // דלת יציאה
-        if(!l.isBoss) {
-            ctx.fillStyle = "#10b981"; ctx.shadowBlur = 20; ctx.shadowColor = "#10b981";
-            ctx.fillRect(l.door.x, l.door.y, l.door.w, l.door.h);
-            ctx.shadowBlur = 0;
-            ctx.fillStyle = "white"; ctx.font = "bold 16px Arial"; ctx.fillText("יציאה", l.door.x+12, l.door.y-15);
-        }
-        
-        // חייזרים קטנים
-        ctx.fillStyle = "#a855f7"; 
-        l.aliens.forEach(a => { if(a.alive) {
-            ctx.fillRect(a.curX, a.y, 35, 35);
-            ctx.fillStyle = "white"; ctx.fillRect(a.curX+5, a.y+8, 8, 8); ctx.fillRect(a.curX+22, a.y+8, 8, 8);
-            ctx.fillStyle = "#a855f7";
-        }});
-
-        // כדורי לייזר
-        ctx.fillStyle = "#60a5fa"; ctx.shadowBlur = 10; ctx.shadowColor = "#60a5fa";
-        bullets.forEach(b => { if(b.alive) ctx.fillRect(b.x, b.y, 15, 6); });
-        ctx.shadowBlur = 0;
-
-        // הבוס הענק
-        if(l.isBoss) {
-            ctx.fillStyle = "#ef4444"; ctx.shadowBlur = 50; ctx.shadowColor = "red";
-            ctx.fillRect(l.boss.x, l.boss.y, l.boss.w, l.boss.h);
-            ctx.shadowBlur = 0;
-            // עיני הבוס
-            ctx.fillStyle = "black";
-            ctx.fillRect(l.boss.x+40, l.boss.y+60, 40, 40);
-            ctx.fillRect(l.boss.x+170, l.boss.y+60, 40, 40);
-            // פה עצבני
-            ctx.fillRect(l.boss.x+60, l.boss.y+180, 130, 20);
-        }
-
-        // השחקן (הנוטאי)
-        ctx.fillStyle = "#38bdf8"; ctx.shadowBlur = 15; ctx.shadowColor = "#38bdf8";
-        ctx.fillRect(player.x, player.y, player.w, player.h);
-        ctx.shadowBlur = 0;
-        // אקדח
-        ctx.fillStyle = "#cbd5e1";
-        ctx.fillRect(player.x + (lastDir === 1 ? 35 : -10), player.y + 18, 15, 7);
-        
+        if(player.y > 500) reset();
+        document.getElementById('lvl').innerText = level;
         document.getElementById('sc').innerText = score;
     }
 
-    function loop() { update(); draw(); requestAnimationFrame(loop); }
+    function draw() {
+        ctx.clearRect(0, 0, 1000, 500);
+        ctx.fillStyle = "#555";
+        platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, p.h));
+        
+        ctx.fillStyle = "blue";
+        ctx.fillRect(player.x, player.y, player.w, player.h);
+
+        ctx.fillStyle = "yellow";
+        bullets.forEach(b => ctx.fillRect(b.x, b.y, 10, 5));
+
+        ctx.fillStyle = "purple";
+        aliens.forEach(a => ctx.fillRect(a.curX, a.y, 30, 30));
+
+        if(boss) {
+            ctx.fillStyle = "red";
+            ctx.fillRect(boss.x, boss.y, boss.w, boss.h);
+            ctx.fillStyle = "black";
+            ctx.fillRect(boss.x+40, boss.y+50, 40, 40);
+            ctx.fillRect(boss.x+170, boss.y+50, 40, 40);
+        }
+        
+        if(!boss) {
+            ctx.fillStyle = "green";
+            ctx.fillRect(960, 380, 40, 80);
+        }
+    }
+
+    function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+    }
+
+    initLevel(level);
     loop();
 </script>
 </body>
