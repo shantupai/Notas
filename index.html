@@ -1,4 +1,204 @@
-<!DOCTYPE html>
+<!DOCTYPE html><!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>הנוטאים - הגרסה המתוקנת</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
+        canvas { display: block; margin: 0 auto; background: #020617; }
+        #stats { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-around; color: white; font-size: 20px; font-weight: bold; pointer-events: none; text-shadow: 2px 2px 2px #000; }
+    </style>
+</head>
+<body>
+    <div id="stats">
+        <div>🚀 שלב: <span id="lvl">1</span></div>
+        <div>❤️ חיים: <span id="hp">3</span></div>
+        <div>✨ ניקוד: <span id="sc">0</span></div>
+    </div>
+    <canvas id="game"></canvas>
+
+<script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 1000; canvas.height = 500;
+
+    // משתני משחק
+    let level = 1, score = 0, health = 3, frames = 0;
+    let player = { x: 50, y: 300, w: 30, h: 30, xv: 0, yv: 0, jumps: 0, invul: 0 };
+    let platforms = [], aliens = [], bullets = [], enemyBullets = [], items = [], door = {};
+    let keys = {};
+
+    const colors = [
+        { bg: "#0f172a", plat: "#334155", accent: "#38bdf8" },
+        { bg: "#1e1b4b", plat: "#312e81", accent: "#818cf8" },
+        { bg: "#064e3b", plat: "#065f46", accent: "#34d399" },
+        { bg: "#450a0a", plat: "#7f1d1d", accent: "#f87171" }
+    ];
+
+    function setupLevel() {
+        // איפוס רשימות
+        platforms = []; aliens = []; bullets = []; enemyBullets = []; items = [];
+        player.x = 50; player.y = 350; player.xv = 0; player.yv = 0;
+        
+        let theme = colors[level % colors.length];
+        canvas.style.background = theme.bg;
+
+        // רצפה בטוחה
+        platforms.push({ x: 0, y: 460, w: 1000, h: 40 });
+
+        // פלטפורמות רנדומליות (קירות)
+        for(let i=0; i<7; i++) {
+            platforms.push({
+                x: 150 + (i * 120),
+                y: 150 + Math.random() * 200,
+                w: 100, h: 15
+            });
+        }
+
+        // יצירת חייזרים
+        for(let i=0; i<Math.min(2 + level, 8); i++) {
+            aliens.push({
+                x: 300 + Math.random() * 600,
+                y: 100 + Math.random() * 200,
+                baseY: 0, hp: 3, lastShot: 0
+            });
+            aliens[i].baseY = aliens[i].y;
+        }
+
+        // דלת בסוף
+        let lastP = platforms[platforms.length-1];
+        door = { x: lastP.x + 20, y: lastP.y - 60, w: 40, h: 60 };
+
+        // חפץ מגן
+        items.push({ x: 400 + Math.random()*200, y: 100, w: 20, h: 20, collected: false });
+
+        document.getElementById('lvl').innerText = level;
+    }
+
+    // שליטה
+    window.onkeydown = e => keys[e.code] = true;
+    window.onkeyup = e => keys[e.code] = false;
+
+    function update() {
+        frames++;
+        if(player.invul > 0) player.invul--;
+
+        // תנועת שחקן
+        if(keys.ArrowRight) player.xv = 5;
+        else if(keys.ArrowLeft) player.xv = -5;
+        else player.xv *= 0.8;
+
+        // קפיצה
+        if((keys.Space || keys.ArrowUp) && player.jumps < 2 && !keys.jumpPressed) {
+            player.yv = -10; player.jumps++;
+            keys.jumpPressed = true;
+        }
+        if(!keys.Space && !keys.ArrowUp) keys.jumpPressed = false;
+
+        player.yv += 0.5; // כוח משיכה
+        player.x += player.xv; player.y += player.yv;
+
+        // התנגשות עם פלטפורמות
+        platforms.forEach(p => {
+            if(player.x < p.x+p.w && player.x+player.w > p.x && player.y+player.h > p.y && player.y+player.h < p.y+p.h+10) {
+                if(player.yv > 0) {
+                    player.y = p.y - player.h; player.yv = 0; player.jumps = 0;
+                }
+            }
+        });
+
+        // ירי שחקן
+        if(keys.KeyF && frames % 15 === 0) {
+            bullets.push({ x: player.x+20, y: player.y+15, xv: 10, active: true });
+        }
+
+        bullets.forEach((b, bi) => {
+            b.x += b.xv;
+            aliens.forEach(a => {
+                if(a.hp > 0 && b.active && b.x > a.x && b.x < a.x+30 && b.y > a.y && b.y < a.y+30) {
+                    a.hp--; b.active = false; score += 20;
+                }
+            });
+            if(b.x > 1000) bullets.splice(bi, 1);
+        });
+
+        // עדכון חייזרים
+        aliens.forEach(a => {
+            if(a.hp <= 0) return;
+            a.y = a.baseY + Math.sin(frames * 0.05) * 40; // ריחוף
+            
+            if(frames % 100 === 0) { // ירי אויב
+                enemyBullets.push({ x: a.x, y: a.y+15, xv: -5, yv: (player.y - a.y)/100 });
+            }
+        });
+
+        // פגיעת אויב בשחקן
+        enemyBullets.forEach((eb, ei) => {
+            eb.x += eb.xv; eb.y += eb.yv;
+            if(player.invul <= 0 && eb.x < player.x+30 && eb.x+10 > player.x && eb.y < player.y+30 && eb.y+10 > player.y) {
+                health--; player.invul = 60; enemyBullets.splice(ei, 1);
+                if(health <= 0) { alert("המשחק נגמר!"); location.reload(); }
+            }
+        });
+
+        // איסוף מגן
+        items.forEach(it => {
+            if(!it.collected && player.x < it.x+20 && player.x+30 > it.x && player.y < it.y+20 && player.y+30 > it.y) {
+                it.collected = true; player.invul = 300; // 5 שניות מגן
+            }
+        });
+
+        // דלת - מעבר שלב
+        if(player.x < door.x+door.w && player.x+30 > door.x && player.y < door.y+door.h && player.y+30 > door.y) {
+            level++; setupLevel();
+        }
+
+        if(player.y > 550) { health--; setupLevel(); }
+        
+        document.getElementById('sc').innerText = score;
+        document.getElementById('hp').innerText = health;
+    }
+
+    function draw() {
+        let theme = colors[level % colors.length];
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // פלטפורמות
+        ctx.fillStyle = theme.plat;
+        platforms.forEach(p => {
+            ctx.fillRect(p.x, p.y, p.w, p.h);
+            ctx.fillStyle = theme.accent; ctx.fillRect(p.x, p.y, p.w, 4); ctx.fillStyle = theme.plat;
+        });
+
+        // דלת
+        ctx.fillStyle = "#10b981"; ctx.fillRect(door.x, door.y, door.w, door.h);
+
+        // חפץ
+        items.forEach(it => { if(!it.collected) { ctx.fillStyle = "#0ea5e9"; ctx.beginPath(); ctx.arc(it.x+10, it.y+10, 10, 0, 7); ctx.fill(); } });
+
+        // שחקן
+        ctx.fillStyle = (player.invul > 0 && frames % 10 < 5) ? "white" : "#38bdf8";
+        ctx.fillRect(player.x, player.y, player.w, player.h);
+
+        // חייזרים
+        aliens.forEach(a => {
+            if(a.hp <= 0) return;
+            ctx.fillStyle = "#a855f7"; ctx.fillRect(a.x, a.y, 30, 30);
+            ctx.fillStyle = "red"; ctx.fillRect(a.x, a.y - 10, 30, 4);
+            ctx.fillStyle = "#22c55e"; ctx.fillRect(a.x, a.y - 10, (a.hp/3)*30, 4);
+        });
+
+        // כדורים
+        ctx.fillStyle = "#60a5fa"; bullets.forEach(b => { if(b.active) ctx.fillRect(b.x, b.y, 15, 4); });
+        ctx.fillStyle = "#f43f5e"; enemyBullets.forEach(eb => ctx.fillRect(eb.x, eb.y, 8, 8));
+    }
+
+    function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
+    setupLevel();
+    gameLoop();
+</script>
+</body>
+</html>
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
