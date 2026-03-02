@@ -164,4 +164,668 @@
     loop();
 </script>
 </body>
+</html><!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>הנוטאים - אתגר 200 השלבים</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #020617; font-family: sans-serif; color: white; }
+        canvas { display: block; background: #0f172a; margin: auto; border: 4px solid #1e293b; }
+        #ui { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-around; font-size: 22px; font-weight: bold; pointer-events: none; }
+        #quiz-container {
+            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: #f8fafc; padding: 30px; border-radius: 20px; text-align: center; color: #1e293b; box-shadow: 0 0 50px rgba(0,0,0,0.9); z-index: 100;
+        }
+        button { padding: 12px 24px; margin: 10px; cursor: pointer; border-radius: 10px; border: none; background: #3b82f6; color: white; font-weight: bold; font-size: 18px; }
+        button:hover { background: #1d4ed8; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div>כוכבים: <span id="score">0</span></div>
+        <div>שלב: <span id="levelDisplay">1</span> / 200</div>
+    </div>
+    <div id="quiz-container">
+        <h2 id="quiz-question">חידה!</h2>
+        <div id="quiz-options"></div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreElement = document.getElementById('score');
+    const levelDisplay = document.getElementById('levelDisplay');
+    const quizContainer = document.getElementById('quiz-container');
+
+    canvas.width = 900; canvas.height = 600;
+
+    let score = 0;
+    let currentLevel = 0;
+    let gameActive = true;
+    let lasersActive = true;
+
+    const player = { x: 50, y: 500, width: 25, height: 25, color: '#00d2ff', xVel: 0, yVel: 0, speed: 5, jumpForce: 11, gravity: 0.5, grounded: false, onWall: false };
+    const keys = {};
+
+    // מאגר חידות
+    const riddleBank = [
+        { q: "מה עולה ולא יורד?", o: ["בלון", "גיל", "מטוס"], c: 1 },
+        { q: "מה שייך לך אבל אחרים משתמשים בו יותר?", o: ["שם", "כסף", "סוד"], c: 0 },
+        { q: "מה רץ בלי רגליים?", o: ["זמן", "מים", "רוח"], c: 1 },
+        { q: "מה יש לו שיניים ולא נושך?", o: ["מסרק", "תפוח", "מפתח"], c: 0 },
+        { q: "כמה זה 10 פחות 3?", o: ["5", "7", "8"], c: 1 }
+    ];
+
+    // מחולל 200 שלבים
+    const levels = [];
+    for (let i = 0; i < 200; i++) {
+        levels.push({
+            platforms: [
+                {x: 0, y: 580, w: 900, h: 20}, // רצפה
+                {x: 200 + (Math.random()*400), y: 400 - (i % 5 * 20), w: 150, h: 20},
+                {x: 50 + (i % 3 * 100), y: 250, w: 100, h: 20},
+                {x: 400, y: 100, w: 30, h: 400} // קיר טיפוס משתנה
+            ],
+            aliens: i > 2 ? [{x: 300, y: 550, range: 150 + (i*2), speed: 2 + (i/20), currentX: 300, dir: 1}] : [],
+            lasers: i % 4 === 0 ? [{x1: 700, y1: 0, x2: 700, y2: 600}] : [],
+            button: i % 4 === 0 ? {x: 100, y: 240, w: 30, h: 10, pressed: false} : null,
+            door: {x: 820, y: 500, w: 40, h: 80},
+            riddle: riddleBank[i % riddleBank.length]
+        });
+    }
+
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    function resetLevel() {
+        player.x = 50; player.y = 500; player.yVel = 0; player.xVel = 0;
+        lasersActive = true;
+        if(levels[currentLevel].button) levels[currentLevel].button.pressed = false;
+    }
+
+    function showQuiz() {
+        gameActive = false;
+        const riddle = levels[currentLevel].riddle;
+        quizContainer.style.display = 'block';
+        document.getElementById('quiz-question').innerText = riddle.q;
+        const opts = document.getElementById('quiz-options');
+        opts.innerHTML = '';
+        riddle.o.forEach((opt, i) => {
+            const btn = document.createElement('button');
+            btn.innerText = opt;
+            btn.onclick = () => {
+                if(i === riddle.c) score += 10;
+                quizContainer.style.display = 'none';
+                currentLevel++;
+                if(currentLevel >= 200) { alert("ניצחת את כל 200 השלבים!"); currentLevel = 0; }
+                levelDisplay.innerText = currentLevel + 1;
+                resetLevel(); gameActive = true; loop();
+            };
+            opts.appendChild(btn);
+        });
+    }
+
+    function update() {
+        if (!gameActive) return;
+        const lvl = levels[currentLevel];
+
+        if (keys['ArrowRight']) player.xVel = player.speed;
+        else if (keys['ArrowLeft']) player.xVel = -player.speed;
+        else player.xVel *= 0.8;
+
+        player.yVel += player.gravity;
+        player.x += player.xVel; player.y += player.yVel;
+
+        player.grounded = false; player.onWall = false;
+
+        lvl.platforms.forEach(plat => {
+            if (player.x < plat.x + plat.w && player.x + player.width > plat.x &&
+                player.y < plat.y + plat.h && player.y + player.height > plat.y) {
+                if (player.y + player.height - player.yVel <= plat.y) {
+                    player.y = plat.y - player.height; player.yVel = 0; player.grounded = true;
+                } else { player.onWall = true; player.yVel = Math.min(player.yVel, 2); }
+            }
+        });
+
+        if (lvl.button && player.x < lvl.button.x + lvl.button.w && player.x + player.width > lvl.button.x && player.y < lvl.button.y + lvl.button.h) {
+            lvl.button.pressed = true; lasersActive = false;
+        }
+
+        if (lasersActive) {
+            lvl.lasers.forEach(l => {
+                if (player.x < l.x2 && player.x + player.width > l.x1 && player.y < 600 && player.y + player.height > 0) resetLevel();
+            });
+        }
+
+        lvl.aliens.forEach(a => {
+            a.currentX += a.speed * a.dir;
+            if (Math.abs(a.currentX - a.x) > a.range) a.dir *= -1;
+            if (player.x < a.currentX + 30 && player.x + player.width > a.currentX && player.y < a.y + 30 && player.y + player.height > a.y) resetLevel();
+        });
+
+        if (player.x < lvl.door.x + lvl.door.w && player.x + player.width > lvl.door.x && player.y < lvl.door.y + lvl.door.h && player.y + player.height > lvl.door.y) showQuiz();
+        if ((keys['Space'] || keys['ArrowUp'])) {
+            if (player.grounded) { player.yVel = -player.jumpForce; player.grounded = false; }
+            else if (player.onWall) { player.yVel = -player.jumpForce; player.xVel = player.xVel > 0 ? -10 : 10; }
+        }
+        if (player.y > canvas.height) resetLevel();
+        if (player.x < 0) player.x = 0; if (player.x > canvas.width) player.x = canvas.width - player.width;
+    }
+
+    function draw() {
+        const lvl = levels[currentLevel];
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#10b981'; ctx.fillRect(lvl.door.x, lvl.door.y, lvl.door.w, lvl.door.h);
+        ctx.fillStyle = '#475569'; lvl.platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, p.h));
+        if(lvl.button) { ctx.fillStyle = lvl.button.pressed ? '#22c55e' : '#ef4444'; ctx.fillRect(lvl.button.x, lvl.button.y, lvl.button.w, lvl.button.h); }
+        if (lasersActive) { ctx.strokeStyle = '#f43f5e'; ctx.lineWidth = 4; lvl.lasers.forEach(l => { ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); }); }
+        ctx.fillStyle = '#a855f7'; lvl.aliens.forEach(a => { ctx.beginPath(); ctx.arc(a.currentX + 15, a.y + 15, 15, 0, Math.PI*2); ctx.fill(); });
+        ctx.fillStyle = player.color; ctx.fillRect(player.x, player.y, player.width, player.height);
+        scoreElement.innerText = score;
+    }
+
+    function loop() { if (gameActive) { update(); draw(); requestAnimationFrame(loop); } }
+    loop();
+</script>
+</body>
+</html><!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>הנוטאים - אתגר 200 השלבים</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #020617; font-family: sans-serif; color: white; }
+        canvas { display: block; background: #0f172a; margin: auto; border: 4px solid #1e293b; }
+        #ui { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-around; font-size: 22px; font-weight: bold; pointer-events: none; }
+        #quiz-container {
+            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: #f8fafc; padding: 30px; border-radius: 20px; text-align: center; color: #1e293b; box-shadow: 0 0 50px rgba(0,0,0,0.9); z-index: 100;
+        }
+        button { padding: 12px 24px; margin: 10px; cursor: pointer; border-radius: 10px; border: none; background: #3b82f6; color: white; font-weight: bold; font-size: 18px; }
+        button:hover { background: #1d4ed8; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div>כוכבים: <span id="score">0</span></div>
+        <div>שלב: <span id="levelDisplay">1</span> / 200</div>
+    </div>
+    <div id="quiz-container">
+        <h2 id="quiz-question">חידה!</h2>
+        <div id="quiz-options"></div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreElement = document.getElementById('score');
+    const levelDisplay = document.getElementById('levelDisplay');
+    const quizContainer = document.getElementById('quiz-container');
+
+    canvas.width = 900; canvas.height = 600;
+
+    let score = 0;
+    let currentLevel = 0;
+    let gameActive = true;
+    let lasersActive = true;
+
+    const player = { x: 50, y: 500, width: 25, height: 25, color: '#00d2ff', xVel: 0, yVel: 0, speed: 5, jumpForce: 11, gravity: 0.5, grounded: false, onWall: false };
+    const keys = {};
+
+    // מאגר חידות
+    const riddleBank = [
+        { q: "מה עולה ולא יורד?", o: ["בלון", "גיל", "מטוס"], c: 1 },
+        { q: "מה שייך לך אבל אחרים משתמשים בו יותר?", o: ["שם", "כסף", "סוד"], c: 0 },
+        { q: "מה רץ בלי רגליים?", o: ["זמן", "מים", "רוח"], c: 1 },
+        { q: "מה יש לו שיניים ולא נושך?", o: ["מסרק", "תפוח", "מפתח"], c: 0 },
+        { q: "כמה זה 10 פחות 3?", o: ["5", "7", "8"], c: 1 }
+    ];
+
+    // מחולל 200 שלבים
+    const levels = [];
+    for (let i = 0; i < 200; i++) {
+        levels.push({
+            platforms: [
+                {x: 0, y: 580, w: 900, h: 20}, // רצפה
+                {x: 200 + (Math.random()*400), y: 400 - (i % 5 * 20), w: 150, h: 20},
+                {x: 50 + (i % 3 * 100), y: 250, w: 100, h: 20},
+                {x: 400, y: 100, w: 30, h: 400} // קיר טיפוס משתנה
+            ],
+            aliens: i > 2 ? [{x: 300, y: 550, range: 150 + (i*2), speed: 2 + (i/20), currentX: 300, dir: 1}] : [],
+            lasers: i % 4 === 0 ? [{x1: 700, y1: 0, x2: 700, y2: 600}] : [],
+            button: i % 4 === 0 ? {x: 100, y: 240, w: 30, h: 10, pressed: false} : null,
+            door: {x: 820, y: 500, w: 40, h: 80},
+            riddle: riddleBank[i % riddleBank.length]
+        });
+    }
+
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    function resetLevel() {
+        player.x = 50; player.y = 500; player.yVel = 0; player.xVel = 0;
+        lasersActive = true;
+        if(levels[currentLevel].button) levels[currentLevel].button.pressed = false;
+    }
+
+    function showQuiz() {
+        gameActive = false;
+        const riddle = levels[currentLevel].riddle;
+        quizContainer.style.display = 'block';
+        document.getElementById('quiz-question').innerText = riddle.q;
+        const opts = document.getElementById('quiz-options');
+        opts.innerHTML = '';
+        riddle.o.forEach((opt, i) => {
+            const btn = document.createElement('button');
+            btn.innerText = opt;
+            btn.onclick = () => {
+                if(i === riddle.c) score += 10;
+                quizContainer.style.display = 'none';
+                currentLevel++;
+                if(currentLevel >= 200) { alert("ניצחת את כל 200 השלבים!"); currentLevel = 0; }
+                levelDisplay.innerText = currentLevel + 1;
+                resetLevel(); gameActive = true; loop();
+            };
+            opts.appendChild(btn);
+        });
+    }
+
+    function update() {
+        if (!gameActive) return;
+        const lvl = levels[currentLevel];
+
+        if (keys['ArrowRight']) player.xVel = player.speed;
+        else if (keys['ArrowLeft']) player.xVel = -player.speed;
+        else player.xVel *= 0.8;
+
+        player.yVel += player.gravity;
+        player.x += player.xVel; player.y += player.yVel;
+
+        player.grounded = false; player.onWall = false;
+
+        lvl.platforms.forEach(plat => {
+            if (player.x < plat.x + plat.w && player.x + player.width > plat.x &&
+                player.y < plat.y + plat.h && player.y + player.height > plat.y) {
+                if (player.y + player.height - player.yVel <= plat.y) {
+                    player.y = plat.y - player.height; player.yVel = 0; player.grounded = true;
+                } else { player.onWall = true; player.yVel = Math.min(player.yVel, 2); }
+            }
+        });
+
+        if (lvl.button && player.x < lvl.button.x + lvl.button.w && player.x + player.width > lvl.button.x && player.y < lvl.button.y + lvl.button.h) {
+            lvl.button.pressed = true; lasersActive = false;
+        }
+
+        if (lasersActive) {
+            lvl.lasers.forEach(l => {
+                if (player.x < l.x2 && player.x + player.width > l.x1 && player.y < 600 && player.y + player.height > 0) resetLevel();
+            });
+        }
+
+        lvl.aliens.forEach(a => {
+            a.currentX += a.speed * a.dir;
+            if (Math.abs(a.currentX - a.x) > a.range) a.dir *= -1;
+            if (player.x < a.currentX + 30 && player.x + player.width > a.currentX && player.y < a.y + 30 && player.y + player.height > a.y) resetLevel();
+        });
+
+        if (player.x < lvl.door.x + lvl.door.w && player.x + player.width > lvl.door.x && player.y < lvl.door.y + lvl.door.h && player.y + player.height > lvl.door.y) showQuiz();
+        if ((keys['Space'] || keys['ArrowUp'])) {
+            if (player.grounded) { player.yVel = -player.jumpForce; player.grounded = false; }
+            else if (player.onWall) { player.yVel = -player.jumpForce; player.xVel = player.xVel > 0 ? -10 : 10; }
+        }
+        if (player.y > canvas.height) resetLevel();
+        if (player.x < 0) player.x = 0; if (player.x > canvas.width) player.x = canvas.width - player.width;
+    }
+
+    function draw() {
+        const lvl = levels[currentLevel];
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#10b981'; ctx.fillRect(lvl.door.x, lvl.door.y, lvl.door.w, lvl.door.h);
+        ctx.fillStyle = '#475569'; lvl.platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, p.h));
+        if(lvl.button) { ctx.fillStyle = lvl.button.pressed ? '#22c55e' : '#ef4444'; ctx.fillRect(lvl.button.x, lvl.button.y, lvl.button.w, lvl.button.h); }
+        if (lasersActive) { ctx.strokeStyle = '#f43f5e'; ctx.lineWidth = 4; lvl.lasers.forEach(l => { ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); }); }
+        ctx.fillStyle = '#a855f7'; lvl.aliens.forEach(a => { ctx.beginPath(); ctx.arc(a.currentX + 15, a.y + 15, 15, 0, Math.PI*2); ctx.fill(); });
+        ctx.fillStyle = player.color; ctx.fillRect(player.x, player.y, player.width, player.height);
+        scoreElement.innerText = score;
+    }
+
+    function loop() { if (gameActive) { update(); draw(); requestAnimationFrame(loop); } }
+    loop();
+</script>
+</body>
+</html><!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>הנוטאים - אתגר 200 השלבים</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #020617; font-family: sans-serif; color: white; }
+        canvas { display: block; background: #0f172a; margin: auto; border: 4px solid #1e293b; }
+        #ui { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-around; font-size: 22px; font-weight: bold; pointer-events: none; }
+        #quiz-container {
+            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: #f8fafc; padding: 30px; border-radius: 20px; text-align: center; color: #1e293b; box-shadow: 0 0 50px rgba(0,0,0,0.9); z-index: 100;
+        }
+        button { padding: 12px 24px; margin: 10px; cursor: pointer; border-radius: 10px; border: none; background: #3b82f6; color: white; font-weight: bold; font-size: 18px; }
+        button:hover { background: #1d4ed8; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div>כוכבים: <span id="score">0</span></div>
+        <div>שלב: <span id="levelDisplay">1</span> / 200</div>
+    </div>
+    <div id="quiz-container">
+        <h2 id="quiz-question">חידה!</h2>
+        <div id="quiz-options"></div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreElement = document.getElementById('score');
+    const levelDisplay = document.getElementById('levelDisplay');
+    const quizContainer = document.getElementById('quiz-container');
+
+    canvas.width = 900; canvas.height = 600;
+
+    let score = 0;
+    let currentLevel = 0;
+    let gameActive = true;
+    let lasersActive = true;
+
+    const player = { x: 50, y: 500, width: 25, height: 25, color: '#00d2ff', xVel: 0, yVel: 0, speed: 5, jumpForce: 11, gravity: 0.5, grounded: false, onWall: false };
+    const keys = {};
+
+    // מאגר חידות
+    const riddleBank = [
+        { q: "מה עולה ולא יורד?", o: ["בלון", "גיל", "מטוס"], c: 1 },
+        { q: "מה שייך לך אבל אחרים משתמשים בו יותר?", o: ["שם", "כסף", "סוד"], c: 0 },
+        { q: "מה רץ בלי רגליים?", o: ["זמן", "מים", "רוח"], c: 1 },
+        { q: "מה יש לו שיניים ולא נושך?", o: ["מסרק", "תפוח", "מפתח"], c: 0 },
+        { q: "כמה זה 10 פחות 3?", o: ["5", "7", "8"], c: 1 }
+    ];
+
+    // מחולל 200 שלבים
+    const levels = [];
+    for (let i = 0; i < 200; i++) {
+        levels.push({
+            platforms: [
+                {x: 0, y: 580, w: 900, h: 20}, // רצפה
+                {x: 200 + (Math.random()*400), y: 400 - (i % 5 * 20), w: 150, h: 20},
+                {x: 50 + (i % 3 * 100), y: 250, w: 100, h: 20},
+                {x: 400, y: 100, w: 30, h: 400} // קיר טיפוס משתנה
+            ],
+            aliens: i > 2 ? [{x: 300, y: 550, range: 150 + (i*2), speed: 2 + (i/20), currentX: 300, dir: 1}] : [],
+            lasers: i % 4 === 0 ? [{x1: 700, y1: 0, x2: 700, y2: 600}] : [],
+            button: i % 4 === 0 ? {x: 100, y: 240, w: 30, h: 10, pressed: false} : null,
+            door: {x: 820, y: 500, w: 40, h: 80},
+            riddle: riddleBank[i % riddleBank.length]
+        });
+    }
+
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    function resetLevel() {
+        player.x = 50; player.y = 500; player.yVel = 0; player.xVel = 0;
+        lasersActive = true;
+        if(levels[currentLevel].button) levels[currentLevel].button.pressed = false;
+    }
+
+    function showQuiz() {
+        gameActive = false;
+        const riddle = levels[currentLevel].riddle;
+        quizContainer.style.display = 'block';
+        document.getElementById('quiz-question').innerText = riddle.q;
+        const opts = document.getElementById('quiz-options');
+        opts.innerHTML = '';
+        riddle.o.forEach((opt, i) => {
+            const btn = document.createElement('button');
+            btn.innerText = opt;
+            btn.onclick = () => {
+                if(i === riddle.c) score += 10;
+                quizContainer.style.display = 'none';
+                currentLevel++;
+                if(currentLevel >= 200) { alert("ניצחת את כל 200 השלבים!"); currentLevel = 0; }
+                levelDisplay.innerText = currentLevel + 1;
+                resetLevel(); gameActive = true; loop();
+            };
+            opts.appendChild(btn);
+        });
+    }
+
+    function update() {
+        if (!gameActive) return;
+        const lvl = levels[currentLevel];
+
+        if (keys['ArrowRight']) player.xVel = player.speed;
+        else if (keys['ArrowLeft']) player.xVel = -player.speed;
+        else player.xVel *= 0.8;
+
+        player.yVel += player.gravity;
+        player.x += player.xVel; player.y += player.yVel;
+
+        player.grounded = false; player.onWall = false;
+
+        lvl.platforms.forEach(plat => {
+            if (player.x < plat.x + plat.w && player.x + player.width > plat.x &&
+                player.y < plat.y + plat.h && player.y + player.height > plat.y) {
+                if (player.y + player.height - player.yVel <= plat.y) {
+                    player.y = plat.y - player.height; player.yVel = 0; player.grounded = true;
+                } else { player.onWall = true; player.yVel = Math.min(player.yVel, 2); }
+            }
+        });
+
+        if (lvl.button && player.x < lvl.button.x + lvl.button.w && player.x + player.width > lvl.button.x && player.y < lvl.button.y + lvl.button.h) {
+            lvl.button.pressed = true; lasersActive = false;
+        }
+
+        if (lasersActive) {
+            lvl.lasers.forEach(l => {
+                if (player.x < l.x2 && player.x + player.width > l.x1 && player.y < 600 && player.y + player.height > 0) resetLevel();
+            });
+        }
+
+        lvl.aliens.forEach(a => {
+            a.currentX += a.speed * a.dir;
+            if (Math.abs(a.currentX - a.x) > a.range) a.dir *= -1;
+            if (player.x < a.currentX + 30 && player.x + player.width > a.currentX && player.y < a.y + 30 && player.y + player.height > a.y) resetLevel();
+        });
+
+        if (player.x < lvl.door.x + lvl.door.w && player.x + player.width > lvl.door.x && player.y < lvl.door.y + lvl.door.h && player.y + player.height > lvl.door.y) showQuiz();
+        if ((keys['Space'] || keys['ArrowUp'])) {
+            if (player.grounded) { player.yVel = -player.jumpForce; player.grounded = false; }
+            else if (player.onWall) { player.yVel = -player.jumpForce; player.xVel = player.xVel > 0 ? -10 : 10; }
+        }
+        if (player.y > canvas.height) resetLevel();
+        if (player.x < 0) player.x = 0; if (player.x > canvas.width) player.x = canvas.width - player.width;
+    }
+
+    function draw() {
+        const lvl = levels[currentLevel];
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#10b981'; ctx.fillRect(lvl.door.x, lvl.door.y, lvl.door.w, lvl.door.h);
+        ctx.fillStyle = '#475569'; lvl.platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, p.h));
+        if(lvl.button) { ctx.fillStyle = lvl.button.pressed ? '#22c55e' : '#ef4444'; ctx.fillRect(lvl.button.x, lvl.button.y, lvl.button.w, lvl.button.h); }
+        if (lasersActive) { ctx.strokeStyle = '#f43f5e'; ctx.lineWidth = 4; lvl.lasers.forEach(l => { ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); }); }
+        ctx.fillStyle = '#a855f7'; lvl.aliens.forEach(a => { ctx.beginPath(); ctx.arc(a.currentX + 15, a.y + 15, 15, 0, Math.PI*2); ctx.fill(); });
+        ctx.fillStyle = player.color; ctx.fillRect(player.x, player.y, player.width, player.height);
+        scoreElement.innerText = score;
+    }
+
+    function loop() { if (gameActive) { update(); draw(); requestAnimationFrame(loop); } }
+    loop();
+</script>
+</body>
+</html><!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>הנוטאים - אתגר 200 השלבים</title>
+    <style>
+        body { margin: 0; overflow: hidden; background: #020617; font-family: sans-serif; color: white; }
+        canvas { display: block; background: #0f172a; margin: auto; border: 4px solid #1e293b; }
+        #ui { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-around; font-size: 22px; font-weight: bold; pointer-events: none; }
+        #quiz-container {
+            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: #f8fafc; padding: 30px; border-radius: 20px; text-align: center; color: #1e293b; box-shadow: 0 0 50px rgba(0,0,0,0.9); z-index: 100;
+        }
+        button { padding: 12px 24px; margin: 10px; cursor: pointer; border-radius: 10px; border: none; background: #3b82f6; color: white; font-weight: bold; font-size: 18px; }
+        button:hover { background: #1d4ed8; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div>כוכבים: <span id="score">0</span></div>
+        <div>שלב: <span id="levelDisplay">1</span> / 200</div>
+    </div>
+    <div id="quiz-container">
+        <h2 id="quiz-question">חידה!</h2>
+        <div id="quiz-options"></div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const scoreElement = document.getElementById('score');
+    const levelDisplay = document.getElementById('levelDisplay');
+    const quizContainer = document.getElementById('quiz-container');
+
+    canvas.width = 900; canvas.height = 600;
+
+    let score = 0;
+    let currentLevel = 0;
+    let gameActive = true;
+    let lasersActive = true;
+
+    const player = { x: 50, y: 500, width: 25, height: 25, color: '#00d2ff', xVel: 0, yVel: 0, speed: 5, jumpForce: 11, gravity: 0.5, grounded: false, onWall: false };
+    const keys = {};
+
+    // מאגר חידות
+    const riddleBank = [
+        { q: "מה עולה ולא יורד?", o: ["בלון", "גיל", "מטוס"], c: 1 },
+        { q: "מה שייך לך אבל אחרים משתמשים בו יותר?", o: ["שם", "כסף", "סוד"], c: 0 },
+        { q: "מה רץ בלי רגליים?", o: ["זמן", "מים", "רוח"], c: 1 },
+        { q: "מה יש לו שיניים ולא נושך?", o: ["מסרק", "תפוח", "מפתח"], c: 0 },
+        { q: "כמה זה 10 פחות 3?", o: ["5", "7", "8"], c: 1 }
+    ];
+
+    // מחולל 200 שלבים
+    const levels = [];
+    for (let i = 0; i < 200; i++) {
+        levels.push({
+            platforms: [
+                {x: 0, y: 580, w: 900, h: 20}, // רצפה
+                {x: 200 + (Math.random()*400), y: 400 - (i % 5 * 20), w: 150, h: 20},
+                {x: 50 + (i % 3 * 100), y: 250, w: 100, h: 20},
+                {x: 400, y: 100, w: 30, h: 400} // קיר טיפוס משתנה
+            ],
+            aliens: i > 2 ? [{x: 300, y: 550, range: 150 + (i*2), speed: 2 + (i/20), currentX: 300, dir: 1}] : [],
+            lasers: i % 4 === 0 ? [{x1: 700, y1: 0, x2: 700, y2: 600}] : [],
+            button: i % 4 === 0 ? {x: 100, y: 240, w: 30, h: 10, pressed: false} : null,
+            door: {x: 820, y: 500, w: 40, h: 80},
+            riddle: riddleBank[i % riddleBank.length]
+        });
+    }
+
+    window.addEventListener('keydown', e => keys[e.code] = true);
+    window.addEventListener('keyup', e => keys[e.code] = false);
+
+    function resetLevel() {
+        player.x = 50; player.y = 500; player.yVel = 0; player.xVel = 0;
+        lasersActive = true;
+        if(levels[currentLevel].button) levels[currentLevel].button.pressed = false;
+    }
+
+    function showQuiz() {
+        gameActive = false;
+        const riddle = levels[currentLevel].riddle;
+        quizContainer.style.display = 'block';
+        document.getElementById('quiz-question').innerText = riddle.q;
+        const opts = document.getElementById('quiz-options');
+        opts.innerHTML = '';
+        riddle.o.forEach((opt, i) => {
+            const btn = document.createElement('button');
+            btn.innerText = opt;
+            btn.onclick = () => {
+                if(i === riddle.c) score += 10;
+                quizContainer.style.display = 'none';
+                currentLevel++;
+                if(currentLevel >= 200) { alert("ניצחת את כל 200 השלבים!"); currentLevel = 0; }
+                levelDisplay.innerText = currentLevel + 1;
+                resetLevel(); gameActive = true; loop();
+            };
+            opts.appendChild(btn);
+        });
+    }
+
+    function update() {
+        if (!gameActive) return;
+        const lvl = levels[currentLevel];
+
+        if (keys['ArrowRight']) player.xVel = player.speed;
+        else if (keys['ArrowLeft']) player.xVel = -player.speed;
+        else player.xVel *= 0.8;
+
+        player.yVel += player.gravity;
+        player.x += player.xVel; player.y += player.yVel;
+
+        player.grounded = false; player.onWall = false;
+
+        lvl.platforms.forEach(plat => {
+            if (player.x < plat.x + plat.w && player.x + player.width > plat.x &&
+                player.y < plat.y + plat.h && player.y + player.height > plat.y) {
+                if (player.y + player.height - player.yVel <= plat.y) {
+                    player.y = plat.y - player.height; player.yVel = 0; player.grounded = true;
+                } else { player.onWall = true; player.yVel = Math.min(player.yVel, 2); }
+            }
+        });
+
+        if (lvl.button && player.x < lvl.button.x + lvl.button.w && player.x + player.width > lvl.button.x && player.y < lvl.button.y + lvl.button.h) {
+            lvl.button.pressed = true; lasersActive = false;
+        }
+
+        if (lasersActive) {
+            lvl.lasers.forEach(l => {
+                if (player.x < l.x2 && player.x + player.width > l.x1 && player.y < 600 && player.y + player.height > 0) resetLevel();
+            });
+        }
+
+        lvl.aliens.forEach(a => {
+            a.currentX += a.speed * a.dir;
+            if (Math.abs(a.currentX - a.x) > a.range) a.dir *= -1;
+            if (player.x < a.currentX + 30 && player.x + player.width > a.currentX && player.y < a.y + 30 && player.y + player.height > a.y) resetLevel();
+        });
+
+        if (player.x < lvl.door.x + lvl.door.w && player.x + player.width > lvl.door.x && player.y < lvl.door.y + lvl.door.h && player.y + player.height > lvl.door.y) showQuiz();
+        if ((keys['Space'] || keys['ArrowUp'])) {
+            if (player.grounded) { player.yVel = -player.jumpForce; player.grounded = false; }
+            else if (player.onWall) { player.yVel = -player.jumpForce; player.xVel = player.xVel > 0 ? -10 : 10; }
+        }
+        if (player.y > canvas.height) resetLevel();
+        if (player.x < 0) player.x = 0; if (player.x > canvas.width) player.x = canvas.width - player.width;
+    }
+
+    function draw() {
+        const lvl = levels[currentLevel];
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#10b981'; ctx.fillRect(lvl.door.x, lvl.door.y, lvl.door.w, lvl.door.h);
+        ctx.fillStyle = '#475569'; lvl.platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, p.h));
+        if(lvl.button) { ctx.fillStyle = lvl.button.pressed ? '#22c55e' : '#ef4444'; ctx.fillRect(lvl.button.x, lvl.button.y, lvl.button.w, lvl.button.h); }
+        if (lasersActive) { ctx.strokeStyle = '#f43f5e'; ctx.lineWidth = 4; lvl.lasers.forEach(l => { ctx.beginPath(); ctx.moveTo(l.x1, l.y1); ctx.lineTo(l.x2, l.y2); ctx.stroke(); }); }
+        ctx.fillStyle = '#a855f7'; lvl.aliens.forEach(a => { ctx.beginPath(); ctx.arc(a.currentX + 15, a.y + 15, 15, 0, Math.PI*2); ctx.fill(); });
+        ctx.fillStyle = player.color; ctx.fillRect(player.x, player.y, player.width, player.height);
+        scoreElement.innerText = score;
+    }
+
+    function loop() { if (gameActive) { update(); draw(); requestAnimationFrame(loop); } }
+    loop();
+</script>
+</body>
 </html>
