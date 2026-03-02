@@ -1,26 +1,200 @@
-<!DOCTYPE html><html lang="he" dir="rtl"><head>    <meta charset="UTF-8">    <title>הנוטאים - אתגר הקירות</title>    <style>        body { margin: 0; overflow: hidden; background: #222; font-family: sans-serif; }        canvas { display: block; background: #1a1a2e; margin: auto; border: 5px solid #444; }        #ui { position: absolute; top: 10px; right: 20px; color: gold; font-size: 24px; font-weight: bold; pointer-events: none; }        #quiz-container {            display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);            background: white; padding: 20px; border-radius: 15px; text-align: center; box-shadow: 0 0 20px rgba(0,0,0,0.5); z-index: 10;        }        button { padding: 10px 20px; margin: 10px; cursor: pointer; border-radius: 5px; border: none; background: #00d2ff; color: white; font-weight: bold; }    </style></head><body>    <div id="ui">כוכבים: <span id="score">0</span></div>        <div id="quiz-container">        <h2 id="quiz-question">חידה!</h2>        <div id="quiz-options"></div>    </div>
-    <canvas id="gameCanvas"></canvas>
-    <script>        const canvas = document.getElementById('gameCanvas');        const ctx = canvas.getContext('2d');        const scoreElement = document.getElementById('score');        const quizContainer = document.getElementById('quiz-container');
-        canvas.width = 800;        canvas.height = 600;
-        let score = 0;        let gameActive = true;
-        const player = {            x: 50, y: 500, width: 30, height: 30,            color: '#00d2ff', xVel: 0, yVel: 0,            speed: 5, jumpForce: 11, gravity: 0.5,            grounded: false, onWall: false, wallDir: 0        };
-        const keys = {};
-        // מפת השלבים: פלטפורמות וקירות        const platforms = [            {x: 0, y: 580, w: 800, h: 20},    // רצפה            {x: 0, y: 0, w: 20, h: 600},      // קיר שמאלי חוסם            {x: 780, y: 0, w: 20, h: 600},    // קיר ימני חוסם                        // קירות לקפיצה (באמצע)            {x: 150, y: 350, w: 30, h: 150},             {x: 300, y: 200, w: 30, h: 200},            {x: 450, y: 300, w: 30, h: 200},                        // פלטפורמות קטנות            {x: 500, y: 150, w: 100, h: 20},            {x: 650, y: 100, w: 100, h: 20},            {x: 50, y: 300, w: 60, h: 20}        ];
-        const hazards = [            {x: 200, y: 565, w: 200, h: 15}, // קוצים על הרצפה            {x: 480, y: 280, w: 40, h: 10}   // מלכודת קטנה        ];
-        const stars = [            {x: 70, y: 270, size: 8, collected: false},            {x: 315, y: 170, size: 8, collected: false},            {x: 550, y: 120, size: 8, collected: false}        ];
-        const quizBox = {x: 700, y: 60, w: 30, h: 30, active: true};
-        const riddle = {            question: "מה עולה למעלה אבל אף פעם לא יורד?",            options: ["בלון", "הגיל שלך", "מטוס"],            correct: 1        };
-        window.addEventListener('keydown', e => keys[e.code] = true);        window.addEventListener('keyup', e => keys[e.code] = false);
-        function resetPlayer() {            player.x = 50; player.y = 500; player.yVel = 0; player.xVel = 0;        }
-        function showQuiz() {            gameActive = false;            quizContainer.style.display = 'block';            document.getElementById('quiz-question').innerText = riddle.question;            const optionsDiv = document.getElementById('quiz-options');            optionsDiv.innerHTML = '';            riddle.options.forEach((opt, index) => {                const btn = document.createElement('button');                btn.innerText = opt;                btn.onclick = () => {                    if (index === riddle.correct) { score += 10; scoreElement.innerText = score; alert("גאוני!"); }                    else { alert("לא נורא, נסה שוב!"); }                    quizContainer.style.display = 'none'; quizBox.active = false; gameActive = true; loop();                };                optionsDiv.appendChild(btn);            });        }
-        function update() {            if (!gameActive) return;
-            if (keys['ArrowRight']) player.xVel = player.speed;            else if (keys['ArrowLeft']) player.xVel = -player.speed;            else player.xVel *= 0.8;
-            player.yVel += player.gravity;            player.x += player.xVel;            player.y += player.yVel;
-            player.grounded = false;            player.onWall = false;
-            for (let plat of platforms) {                if (player.x < plat.x + plat.w && player.x + player.width > plat.x &&                    player.y < plat.y + plat.h && player.y + player.height > plat.y) {                                        // התנגשות מלמעלה (נחיתה)                    if (player.y + player.height - player.yVel <= plat.y) {                        player.y = plat.y - player.height;                        player.yVel = 0;                        player.grounded = true;                    }                     // התנגשות מהצדדים (קירות)                    else {                        player.onWall = true;                        player.yVel = Math.min(player.yVel, 2); // החלקה                    }                }            }
-            for (let hz of hazards) {                if (player.x < hz.x + hz.w && player.x + player.width > hz.x &&                    player.y < hz.y + hz.h && player.y + player.height > hz.y) resetPlayer();            }
-            for (let star of stars) {                if (!star.collected && player.x < star.x + star.size && player.x + player.width > star.x &&                    player.y < star.y + star.size && player.y + player.height > star.y) {                    star.collected = true; score += 1; scoreElement.innerText = score;                }            }
-            if (quizBox.active && player.x < quizBox.x + quizBox.w && player.x + player.width > quizBox.x &&                player.y < quizBox.y + quizBox.h && player.y + player.height > quizBox.y) showQuiz();
-            if ((keys['Space'] || keys['ArrowUp'])) {                if (player.grounded) {                    player.yVel = -player.jumpForce;                    player.grounded = false;                } else if (player.onWall) {                    player.yVel = -player.jumpForce;                    player.xVel = (player.xVel > 0) ? -8 : 8; // קפיצה מהקיר לצד השני                }            }                        if (player.y > canvas.height) resetPlayer();        }
-        function draw() {            ctx.clearRect(0, 0, canvas.width, canvas.height);            ctx.fillStyle = '#4a4e69';            for (let plat of platforms) ctx.fillRect(plat.x, plat.y, plat.w, plat.h);            ctx.fillStyle = '#ff4d4d';            for (let hz of hazards) ctx.fillRect(hz.x, hz.y, hz.w, hz.h);            ctx.fillStyle = 'gold';            for (let star of stars) {                if (!star.collected) { ctx.beginPath(); ctx.arc(star.x, star.y, star.size, 0, Math.PI*2); ctx.fill(); }            }            if (quizBox.active) {                ctx.fillStyle = '#9b59b6'; ctx.fillRect(quizBox.x, quizBox.y, quizBox.w, quizBox.h);                ctx.fillStyle = 'white'; ctx.font = '20px Arial'; ctx.fillText('?', quizBox.x + 10, quizBox.y + 22);            }            ctx.fillStyle = player.color;            ctx.fillRect(player.x, player.y, player.width, player.height);        }
-        function loop() { if (gameActive) { update(); draw(); requestAnimationFrame(loop); } }        loop();    </script></body></html> 
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>הנוטאים - קרב הלייזרים והגיגה בוס</title>
+    <style>
+        body { margin: 0; background: #020617; color: white; font-family: system-ui, sans-serif; overflow: hidden; }
+        canvas { display: block; margin: 0 auto; background: #0f172a; border-bottom: 5px solid #3b82f6; }
+        #ui { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-around; font-size: 24px; font-weight: bold; pointer-events: none; text-shadow: 2px 2px 4px #000; }
+        #boss-ui { color: #f87171; display: none; text-align: center; }
+        .controls { position: absolute; bottom: 10px; width: 100%; text-align: center; color: #94a3b8; font-size: 18px; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div>🚀 שלב: <span id="lvl">1</span></div>
+        <div id="boss-ui">👾 גיגה-בוס: <span id="bhp">100</span>%</div>
+        <div>✨ כוכבים: <span id="sc">0</span></div>
+    </div>
+    <div class="controls">חצים לזוז | רווח לקפיצה כפולה | <b>F ללייזרים</b></div>
+    <canvas id="g"></canvas>
+
+<script>
+    const canvas = document.getElementById('g'), ctx = canvas.getContext('2d');
+    canvas.width = 1100; canvas.height = 550;
+
+    let level = 1, score = 0, bullets = [], lastDir = 1, jumps = 0;
+    let currentLevelData = null;
+    
+    const player = { x: 50, y: 400, w: 35, h: 35, xv: 0, yv: 0, speed: 7, jump: 12, grav: 0.55 };
+    const keys = {};
+
+    function createLevel(n) {
+        const isBoss = n % 10 === 0;
+        document.getElementById('boss-ui').style.display = isBoss ? 'block' : 'none';
+        bullets = [];
+        
+        let data = {
+            isBoss: isBoss, bossHp: 500, maxBossHp: 500,
+            plats: [{x: 0, y: 510, w: 1100, h: 40}], // רצפה בסיסית
+            aliens: [],
+            door: { x: 1020, y: 430, w: 60, h: 80 }
+        };
+
+        if (isBoss) {
+            data.boss = { x: 450, y: 100, w: 220, h: 220, s: 3, d: 1 };
+            // פלטפורמות עזר בקרב בוס
+            data.plats.push({x: 100, y: 350, w: 200, h: 20}, {x: 800, y: 350, w: 200, h: 20});
+        } else {
+            // יצירת מדרגות רנדומליות אך אפשריות
+            for(let i=0; i < 6; i++) {
+                data.plats.push({
+                    x: 150 + (i * 150), 
+                    y: 400 - (i * 50) + (Math.random() * 40), 
+                    w: 130, h: 20
+                });
+            }
+            // הוספת חייזרים
+            for(let i=0; i < Math.min(n, 5); i++) {
+                data.aliens.push({x: 300 + (Math.random() * 600), y: 480, curX: 0, r: 100, s: 2 + (n/10), d: 1, alive: true});
+            }
+            data.aliens.forEach(a => a.curX = a.x);
+        }
+        return data;
+    }
+
+    currentLevelData = createLevel(level);
+
+    window.onkeydown = e => { 
+        keys[e.code] = true;
+        if ((e.code === 'Space' || e.code === 'ArrowUp') && jumps < 2) {
+            player.yv = -player.jump;
+            jumps++;
+        }
+    };
+    window.onkeyup = e => keys[e.code] = false;
+
+    function reset() {
+        player.x = 50; player.y = 400; player.xv = 0; player.yv = 0; jumps = 0;
+        currentLevelData = createLevel(level);
+    }
+
+    function update() {
+        const l = currentLevelData;
+        if(keys.ArrowRight) { player.xv = player.speed; lastDir = 1; }
+        else if(keys.ArrowLeft) { player.xv = -player.speed; lastDir = -1; }
+        else player.xv *= 0.8;
+
+        player.yv += player.grav;
+        player.x += player.xv; player.y += player.yv;
+
+        l.plats.forEach(p => {
+            if(player.x < p.x+p.w && player.x+player.w > p.x && player.y < p.y+p.h && player.y+player.h > p.y) {
+                if(player.yv > 0 && player.y + player.h - player.yv <= p.y) {
+                    player.y = p.y - player.h; player.yv = 0; jumps = 0;
+                }
+            }
+        });
+
+        // ירי לייזר (F)
+        if(keys.KeyF && Math.random() > 0.85) {
+            bullets.push({x: player.x + (lastDir === 1 ? 35 : 0), y: player.y + 18, xv: 18 * lastDir, alive: true});
+        }
+
+        bullets.forEach((b, idx) => {
+            b.x += b.xv;
+            l.aliens.forEach(a => {
+                if(a.alive && b.x > a.curX && b.x < a.curX+30 && b.y > a.y && b.y < a.y+30) {
+                    a.alive = false; b.alive = false; score += 25;
+                }
+            });
+            if(l.isBoss && b.x > l.boss.x && b.x < l.boss.x+l.boss.w && b.y > l.boss.y && b.y < l.boss.y+l.boss.h) {
+                l.bossHp -= 5; b.alive = false;
+                document.getElementById('bhp').innerText = Math.ceil((l.bossHp / l.maxBossHp) * 100);
+                if(l.bossHp <= 0) { level++; score += 500; reset(); document.getElementById('lvl').innerText = level; }
+            }
+            if(b.x > canvas.width || b.x < 0) bullets.splice(idx, 1);
+        });
+
+        l.aliens.forEach(a => {
+            if(!a.alive) return;
+            a.curX += a.s * a.d;
+            if(Math.abs(a.curX - a.x) > a.r) a.d *= -1;
+            if(player.x < a.curX+25 && player.x+player.w > a.curX && player.y < a.curX+25 && player.y+player.h > a.y) reset();
+        });
+
+        if(!l.isBoss) {
+            if(player.x > l.door.x - 20) { level++; score += 100; reset(); document.getElementById('lvl').innerText = level; }
+        } else {
+            l.boss.x += l.boss.s * l.boss.d; 
+            if(l.boss.x > 850 || l.boss.x < 50) l.boss.d *= -1;
+            if(player.x < l.boss.x+l.boss.w && player.x+player.w > l.boss.x && player.y < l.boss.y+l.boss.h && player.y+player.h > l.boss.y) reset();
+        }
+
+        if(player.y > 600) reset();
+        if(player.x < 0) player.x = 0;
+        document.getElementById('sc').innerText = score;
+    }
+
+    function draw() {
+        const l = currentLevelData;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // פלטפורמות עם סטייל
+        ctx.fillStyle = "#334155";
+        l.plats.forEach(p => {
+            ctx.fillRect(p.x, p.y, p.w, p.h);
+            ctx.fillStyle = "#475569"; ctx.fillRect(p.x, p.y, p.w, 4); ctx.fillStyle = "#334155";
+        });
+
+        // דלת
+        if(!l.isBoss) {
+            ctx.fillStyle = "#10b981"; ctx.shadowBlur = 15; ctx.shadowColor = "#10b981";
+            ctx.fillRect(l.door.x, l.door.y, l.door.w, l.door.h);
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = "white"; ctx.font = "bold 16px sans-serif"; ctx.fillText("יציאה", l.door.x+5, l.door.y-10);
+        }
+        
+        // חייזרים
+        ctx.fillStyle = "#a855f7"; 
+        l.aliens.forEach(a => { if(a.alive) ctx.fillRect(a.curX, a.y, 30, 30); });
+
+        // לייזרים זוהרים
+        bullets.forEach(b => {
+            if(b.alive) {
+                ctx.fillStyle = "#60a5fa"; ctx.shadowBlur = 8; ctx.shadowColor = "#60a5fa";
+                ctx.fillRect(b.x, b.y, 20, 4);
+                ctx.shadowBlur = 0;
+            }
+        });
+
+        // בוס ענק
+        if(l.isBoss) {
+            ctx.fillStyle = "#ef4444"; ctx.shadowBlur = 30; ctx.shadowColor = "red";
+            ctx.fillRect(l.boss.x, l.boss.y, l.boss.w, l.boss.h);
+            ctx.shadowBlur = 0;
+            // עיניים
+            ctx.fillStyle = "white";
+            ctx.fillRect(l.boss.x + 40, l.boss.y + 50, 40, 40);
+            ctx.fillRect(l.boss.x + 140, l.boss.y + 50, 40, 40);
+            ctx.fillStyle = "black";
+            let eyeMove = (player.x > l.boss.x + 110) ? 15 : -5;
+            ctx.fillRect(l.boss.x + 55 + eyeMove, l.boss.y + 65, 15, 15);
+            ctx.fillRect(l.boss.x + 155 + eyeMove, l.boss.y + 65, 15, 15);
+        }
+
+        // שחקן
+        ctx.fillStyle = "#38bdf8"; ctx.shadowBlur = 10; ctx.shadowColor = "#38bdf8";
+        ctx.fillRect(player.x, player.y, player.w, player.h);
+        ctx.shadowBlur = 0;
+        // אקדח
+        ctx.fillStyle = "#cbd5e1";
+        ctx.fillRect(player.x + (lastDir === 1 ? 30 : -10), player.y + 18, 15, 6);
+    }
+
+    function loop() { update(); draw(); requestAnimationFrame(loop); }
+    loop();
+</script>
+</body>
+</html>
