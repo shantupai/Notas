@@ -1,5 +1,86 @@
 <!DOCTYPE html><!DOCTYPE html>
+<html lang="he" dir="rtl"><!DOCTYPE html>
 <html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>הנוטאים - שליטה מלאה ופיצוצים</title>
+    <style>
+        body { margin: 0; background: #000; overflow: hidden; font-family: sans-serif; }
+        canvas { display: block; margin: 0 auto; background: #020617; border: 2px solid #334155; }
+        #stats { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-around; color: white; font-size: 20px; font-weight: bold; pointer-events: none; text-shadow: 2px 2px 2px #000; }
+    </style>
+</head>
+<body>
+    <div id="stats">
+        <div>🚀 שלב: <span id="lvl">1</span></div>
+        <div>❤️ חיים: <span id="hp">3</span></div>
+        <div>✨ ניקוד: <span id="sc">0</span></div>
+    </div>
+    <canvas id="game"></canvas>
+
+<script>
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 1000; canvas.height = 500;
+
+    let level = 1, score = 0, health = 3, frames = 0;
+    let player = { x: 50, y: 350, w: 30, h: 30, xv: 0, yv: 0, jumps: 0, invul: 0 };
+    let platforms = [], aliens = [], bullets = [], enemyBullets = [], particles = [], door = {};
+    let keys = {};
+
+    function setupLevel() {
+        platforms = []; aliens = []; bullets = []; enemyBullets = []; particles = [];
+        player.x = 50; player.y = 350; player.xv = 0; player.yv = 0;
+        
+        // רצפה
+        platforms.push({ x: 0, y: 460, w: 1000, h: 40 });
+
+        // פלטפורמות משתנות לכל שלב
+        for(let i=0; i<6; i++) {
+            platforms.push({
+                x: 180 + (i * 130),
+                y: 150 + Math.random() * 200,
+                w: 100, h: 15
+            });
+        }
+
+        // חייזרים מרחפים
+        for(let i=0; i<Math.min(2 + level, 7); i++) {
+            aliens.push({
+                x: 300 + Math.random() * 600,
+                y: 100 + Math.random() * 200,
+                baseY: 0, hp: 3, lastShot: 0
+            });
+            aliens[i].baseY = aliens[i].y;
+        }
+
+        // דלת בסוף על הפלטפורמה האחרונה
+        let lastP = platforms[platforms.length-1];
+        door = { x: lastP.x + 25, y: lastP.y - 65, w: 40, h: 65 };
+
+        document.getElementById('lvl').innerText = level;
+    }
+
+    // ניהול מקלדת מתוקן - מונע תנועה עצמאית
+    window.addEventListener('keydown', e => { keys[e.code] = true; });
+    window.addEventListener('keyup', e => { keys[e.code] = false; });
+
+    function createExplosion(x, y, color) {
+        for(let i=0; i<10; i++) {
+            particles.push({
+                x: x, y: y, 
+                xv: (Math.random()-0.5)*10, 
+                yv: (Math.random()-0.5)*10, 
+                life: 20, color: color
+            });
+        }
+    }
+
+    function update() {
+        frames++;
+        if(player.invul > 0) player.invul--;
+
+        // שליטה הדוקה: אם לא
 <head>
     <meta charset="UTF-8">
     <title>הנוטאים - הגרסה המתוקנת</title>
