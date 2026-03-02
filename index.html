@@ -1,1 +1,168 @@
-ה
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>הנוטאים - העולמות המשתנים</title>
+    <style>
+        body { margin: 0; background: #020617; color: white; font-family: system-ui, sans-serif; overflow: hidden; }
+        canvas { display: block; margin: 0 auto; border-bottom: 5px solid #ef4444; transition: background 0.5s; }
+        #ui { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-around; font-size: 24px; font-weight: bold; pointer-events: none; text-shadow: 2px 2px 4px #000; }
+        #boss-ui { color: #f87171; display: none; text-align: center; }
+        .controls { position: absolute; bottom: 10px; width: 100%; text-align: center; color: #94a3b8; font-size: 18px; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <div>🚀 שלב: <span id="lvl">1</span> | עולם: <span id="wname">חלל</span></div>
+        <div id="boss-ui">👾 גיגה-בוס: <span id="bhp">100</span>%</div>
+        <div>✨ כוכבים: <span id="sc">0</span></div>
+    </div>
+    <div class="controls">חצים לזוז | רווח לקפיצה כפולה | <b>F ללייזרים</b></div>
+    <canvas id="g"></canvas>
+
+<script>
+    const canvas = document.getElementById('g'), ctx = canvas.getContext('2d');
+    canvas.width = 1100; canvas.height = 550;
+
+    let level = 1, score = 0, bullets = [], enemyBullets = [], lastDir = 1, jumps = 0, frames = 0;
+    let currentLevelData = null;
+    let lastShotTime = 0;
+    
+    const player = { x: 50, y: 400, w: 28, h: 28, xv: 0, yv: 0, speed: 7, jump: 11.5, grav: 0.55, invul: 0 };
+    const keys = {};
+
+    const worldTypes = [
+        { name: "מערת הקריסטל", bg: "#0f172a", plat: "#334155", accent: "#38bdf8" },
+        { name: "מצודת הלבה", bg: "#1a0a0a", plat: "#451a03", accent: "#f97316" },
+        { name: "הכוכב הירוק", bg: "#052e16", plat: "#14532d", accent: "#22c55e" }
+    ];
+
+    function createLevel(n) {
+        const isBoss = n % 5 === 0;
+        const world = worldTypes[Math.floor(Math.random() * worldTypes.length)];
+        document.getElementById('wname').innerText = isBoss ? "זירת הבוס" : world.name;
+        document.getElementById('boss-ui').style.display = isBoss ? 'block' : 'none';
+        canvas.style.background = world.bg;
+        
+        bullets = []; enemyBullets = [];
+        
+        let data = {
+            isBoss: isBoss, bossHp: 1500 + (n*50), maxBossHp: 1500 + (n*50),
+            plats: [{x: 0, y: 510, w: 1100, h: 40}], 
+            aliens: [], items: [], world: world,
+            door: { x: 1030, y: 400, w: 50, h: 100 }
+        };
+
+        if (isBoss) {
+            data.boss = { x: 450, y: 50, w: 180, h: 180, s: 6, d: 1, lastShot: 0 };
+            data.plats.push({x: 50, y: 400, w: 200, h: 20}, {x: 850, y: 400, w: 200, h: 20}, {x: 400, y: 250, w: 300, h: 20});
+        } else {
+            // יצירת סגנונות שלבים שונים
+            let style = Math.floor(Math.random() * 3); 
+            if (style === 0) { // שלב מפוזר
+                for(let i=0; i<15; i++) {
+                    data.plats.push({x: Math.random()*900, y: 150 + Math.random()*300, w: 80+Math.random()*100, h: 15});
+                }
+            } else if (style === 1) { // שלב מדרגות
+                for(let i=0; i<8; i++) {
+                    data.plats.push({x: i*130, y: 450 - i*50, w: 120, h: 15});
+                }
+            } else { // שלב איים גבוהים
+                data.plats.push({x: 200, y: 350, w: 150, h: 15}, {x: 500, y: 200, w: 150, h: 15}, {x: 800, y: 350, w: 150, h: 15});
+            }
+
+            // מיקום דלת רנדומלי על אחת הפלטפורמות (לא הרצפה)
+            let randomPlat = data.plats[Math.floor(Math.random() * (data.plats.length - 1)) + 1];
+            data.door = { x: randomPlat.x + 10, y: randomPlat.y - 100, w: 50, h: 100 };
+
+            // חפצים
+            data.plats.forEach(p => {
+                if(Math.random() > 0.8) data.items.push({x: p.x + 10, y: p.y-30, w: 20, h: 20, type: Math.random()>0.5?'score':'shield', collected: false});
+            });
+
+            // חייזרים עם רמות קושי
+            let alienCount = Math.min(n + 4, 15);
+            for(let i=0; i < alienCount; i++) {
+                data.aliens.push({
+                    startX: 100 + Math.random()*800, startY: 100 + Math.random()*300,
+                    x: 0, y: 0, r: 50 + Math.random()*100, hp: 3, alive: true, 
+                    lastShot: Date.now() + Math.random()*2000, hitTimer: 0
+                });
+            }
+        }
+        return data;
+    }
+
+    currentLevelData = createLevel(level);
+
+    window.onkeydown = e => { keys[e.code] = true; if((e.code==='Space'||e.code==='ArrowUp')&&jumps<2){player.yv=-player.jump; jumps++;} };
+    window.onkeyup = e => keys[e.code] = false;
+
+    function reset() { if(player.invul>0)return; player.x=50; player.y=400; player.xv=0; player.yv=0; jumps=0; currentLevelData=createLevel(level); }
+
+    function update() {
+        frames++; const l = currentLevelData; const now = Date.now();
+        if(player.invul > 0) player.invul--;
+
+        if(keys.ArrowRight) { player.xv = player.speed; lastDir = 1; }
+        else if(keys.ArrowLeft) { player.xv = -player.speed; lastDir = -1; }
+        else player.xv *= 0.8;
+
+        player.yv += player.grav; player.x += player.xv; player.y += player.yv;
+
+        l.plats.forEach(p => {
+            if(player.x < p.x+p.w && player.x+player.w > p.x && player.y < p.y+p.h && player.y+player.h > p.y) {
+                if(player.yv > 0 && player.y + player.h - player.yv <= p.y) { player.y = p.y - player.h; player.yv = 0; jumps = 0; }
+            }
+        });
+
+        if(keys.KeyF && now - lastShotTime > 180) {
+            bullets.push({x: player.x + (lastDir === 1 ? player.w : 0), y: player.y + 14, xv: 18 * lastDir, alive: true});
+            lastShotTime = now;
+        }
+
+        bullets.forEach(b => {
+            if(!b.alive) return; b.x += b.xv;
+            l.aliens.forEach(a => {
+                if(a.alive && a.hitTimer<=0 && b.x > a.x && b.x < a.x+35 && b.y > a.y && b.y < a.y+30) {
+                    a.hp--; a.hitTimer = 10; b.alive = false; if(a.hp <= 0) { a.alive = false; score += 150; }
+                }
+            });
+            if(l.isBoss && b.x > l.boss.x && b.x < l.boss.x+l.boss.w && b.y > l.boss.y && b.y < l.boss.y+l.boss.h) {
+                l.bossHp -= 10; b.alive = false; document.getElementById('bhp').innerText = Math.ceil((l.bossHp/l.maxBossHp)*100);
+                if(l.bossHp <= 0) { level++; score += 2000; reset(); document.getElementById('lvl').innerText = level; }
+            }
+            if(b.x > canvas.width || b.x < 0) b.alive = false;
+        });
+
+        enemyBullets.forEach((eb, idx) => {
+            eb.x += eb.xv; eb.y += eb.yv;
+            if(eb.x < player.x+player.w && eb.x+10 > player.x && eb.y < player.y+player.h && eb.y+10 > player.y) { reset(); enemyBullets.splice(idx,1); }
+            if(eb.x > canvas.width || eb.x < 0 || eb.y > canvas.height || eb.y < 0) enemyBullets.splice(idx, 1);
+        });
+
+        l.aliens.forEach(a => {
+            if(!a.alive) return; if(a.hitTimer > 0) a.hitTimer--;
+            a.x = a.startX + Math.sin(frames * 0.02) * a.r;
+            a.y = a.startY + Math.cos(frames * 0.04) * 40;
+            if(now - a.lastShot > 2000) {
+                let dx = player.x - a.x, dy = player.y - a.y, dist = Math.sqrt(dx*dx+dy*dy);
+                enemyBullets.push({x: a.x+15, y: a.y+10, xv: (dx/dist)*6, yv: (dy/dist)*6});
+                a.lastShot = now;
+            }
+        });
+
+        if(l.isBoss) {
+            l.boss.x += l.boss.s * l.boss.d; if(l.boss.x > 900 || l.boss.x < 20) l.boss.d *= -1;
+            if(now - l.boss.lastShot > 1000) {
+                for(let i=-2; i<=2; i++) enemyBullets.push({x: l.boss.x + 90, y: l.boss.y + 180, xv: i*2, yv: 7});
+                l.boss.lastShot = now;
+            }
+        } else {
+            if(player.x < l.door.x+l.door.w && player.x+player.w > l.door.x && player.y < l.door.y+l.door.h && player.y+player.h > l.door.y) {
+                level++; score += 500; reset(); document.getElementById('lvl').innerText = level;
+            }
+        }
+
+        l.items.forEach(item => {
+            if(!item.collected && player.x < item.x + item.w && player.x + player.w > item.x && player.y < item.y +ה
