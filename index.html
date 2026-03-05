@@ -1,147 +1,148 @@
 <!DOCTYPE html>
-<html lang="he" dir="rtl">
+<html lang="he">
 <head>
     <meta charset="UTF-8">
-    <title>הנוטאים - הכוכב האדום כאן!</title>
+    <title>משחק הכוכב האדום</title>
     <style>
-        body { margin: 0; background: #020617; overflow: hidden; font-family: sans-serif; }
-        canvas { display: block; margin: 0 auto; background: #0b0f19; }
-        #stats { position: absolute; top: 10px; width: 100%; text-align: center; color: white; font-size: 20px; font-weight: bold; pointer-events: none; }
+        body { margin: 0; background: #111; overflow: hidden; color: white; font-family: sans-serif; }
+        canvas { display: block; background: #000; border: 2px solid #444; margin: 10px auto; }
+        #info { text-align: center; font-size: 20px; }
     </style>
 </head>
 <body>
-    <div id="stats">🚀 שלב: <span id="lvl">1</span> | ✨ כוכבים: <span id="sc">0</span> | 🔴 כפיל: <span id="cl-stat">לא פעיל</span></div>
-    <canvas id="game"></canvas>
+    <div id="info">ניקוד: <span id="score">0</span> | סטטוס כפיל: <span id="status">כבוי</span></div>
+    <canvas id="gameCanvas"></canvas>
 
 <script>
-    const canvas = document.getElementById('game'), ctx = canvas.getContext('2d');
-    canvas.width = 1100; canvas.height = 550;
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    canvas.width = 800;
+    canvas.height = 500;
 
-    let score = 0, level = 1, frames = 0;
-    let player = { x: 100, y: 450, w: 25, h: 25, xv: 0, yv: 0, jumps: 0 };
-    let aiClone = null; // הכפיל
-    let platforms = [], stars = [], redStar = { x: 300, y: 490, collected: false }; // הכוכב האדום על הרצפה!
+    let score = 0;
     let keys = {};
+    
+    // שחקן
+    let player = { x: 50, y: 400, w: 30, h: 30, dy: 0, speed: 5, jumpPower: -12, grounded: false };
+    
+    // כוכב אדום (הבונוס)
+    let redStar = { x: 200, y: 450, r: 15, active: true };
+    
+    // כפיל (מתחיל כ-null)
+    let clone = null;
+    
+    // כוכבים צהובים
+    let stars = [
+        { x: 400, y: 300, active: true },
+        { x: 600, y: 200, active: true },
+        { x: 100, y: 150, active: true },
+        { x: 700, y: 400, active: true }
+    ];
 
-    function setupLevel() {
-        platforms = []; stars = [];
-        player.x = 100; player.y = 450;
-        aiClone = null;
-        redStar.collected = false;
-        redStar.x = 300; redStar.y = 490; // תמיד על הרצפה בהתחלה
-
-        platforms.push({ x: 0, y: 520, w: 1100, h: 30 }); // רצפה
-        platforms.push({ x: 400, y: 350, w: 150, h: 15 });
-        platforms.push({ x: 650, y: 250, w: 150, h: 15 });
-
-        // כוכבים צהובים רגילים
-        for(let i=0; i<5; i++) {
-            stars.push({ x: 200 + i*200, y: 150 + Math.random()*200, collected: false });
-        }
-    }
-
-    window.onkeydown = e => keys[e.code] = true;
-    window.onkeyup = e => keys[e.code] = false;
+    window.addEventListener("keydown", e => keys[e.code] = true);
+    window.addEventListener("keyup", e => keys[e.code] = false);
 
     function update() {
-        frames++;
-        
         // תנועת שחקן
-        if(keys.ArrowRight) player.xv = 6;
-        else if(keys.ArrowLeft) player.xv = -6;
-        else player.xv *= 0.8;
+        if (keys["ArrowRight"]) player.x += player.speed;
+        if (keys["ArrowLeft"]) player.x -= player.speed;
+        
+        // קפיצה וגרביטציה
+        if (keys["Space"] && player.grounded) {
+            player.dy = player.jumpPower;
+            player.grounded = false;
+        }
+        
+        player.dy += 0.6; // גרביטציה
+        player.y += player.dy;
+        
+        // התנגשות ברצפה
+        if (player.y + player.h > canvas.height - 20) {
+            player.y = canvas.height - 20 - player.h;
+            player.dy = 0;
+            player.grounded = true;
+        }
 
-        player.yv += 0.6;
-        player.x += player.xv;
-        player.y += player.yv;
+        // בדיקה אם השחקן נוגע בכוכב האדום
+        if (redStar.active && Math.hypot(player.x - redStar.x, player.y - redStar.y) < 30) {
+            redStar.active = false;
+            clone = { x: player.x, y: player.y, w: 20, h: 20 };
+            document.getElementById("status").innerText = "פעיל!";
+        }
 
-        // התנגשות רצפה ופלטפורמות
-        platforms.forEach(p => {
-            if(player.x < p.x+p.w && player.x+player.w > p.x && player.y+player.h > p.y && player.y+player.h < p.y+p.h+10) {
-                player.y = p.y - player.h; player.yv = 0; player.jumps = 0;
+        // לוגיקת כפיל (זז לבד לכוכבים)
+        if (clone) {
+            let target = stars.find(s => s.active); // מוצא את הכוכב הפעיל הראשון
+            if (target) {
+                let dx = target.x - clone.x;
+                let dy = target.y - clone.y;
+                let dist = Math.hypot(dx, dy);
+                
+                // תנועה חלקה לכיוון הכוכב
+                clone.x += (dx / dist) * 4;
+                clone.y += (dy / dist) * 4;
+                
+                // אם הכפיל הגיע לכוכב
+                if (dist < 10) {
+                    target.active = false;
+                    score += 10;
+                    document.getElementById("score").innerText = score;
+                }
             }
-        });
-
-        if((keys.Space || keys.ArrowUp) && player.jumps < 2 && !player.jumpLock) {
-            player.yv = -12; player.jumps++; player.jumpLock = true;
-        }
-        if(!keys.Space && !keys.ArrowUp) player.jumpLock = false;
-
-        // איסוף הכוכב האדום על ידי השחקן
-        if(!redStar.collected && Math.abs(player.x - redStar.x) < 30 && Math.abs(player.y - redStar.y) < 30) {
-            redStar.collected = true;
-            aiClone = { x: player.x, y: player.y, w: 20, h: 20 };
-            document.getElementById('cl-stat').innerText = "פעיל!";
         }
 
-        // לוגיקת הכפיל האוטומטי
-        if(aiClone) {
-            let target = stars.find(s => !s.collected);
-            if(target) {
-                let dx = target.x - aiClone.x;
-                let dy = target.y - aiClone.y;
-                let dist = Math.sqrt(dx*dx + dy*dy);
-                aiClone.x += (dx/dist) * 7; // מהירות הכפיל
-                aiClone.y += (dy/dist) * 7;
-
-                if(dist < 15) { target.collected = true; score += 100; }
-            } else {
-                // אם אין כוכבים, שיחזור לשחקן
-                let dx = player.x - aiClone.x;
-                let dy = player.y - aiClone.y;
-                aiClone.x += dx * 0.1;
-                aiClone.y += dy * 0.1;
-            }
-        }
-
-        // איסוף שחקן רגיל
+        // איסוף כוכבים ע"י השחקן
         stars.forEach(s => {
-            if(!s.collected && Math.abs(player.x - s.x) < 30 && Math.abs(player.y - s.y) < 30) {
-                s.collected = true; score += 50;
+            if (s.active && Math.hypot(player.x - s.x, player.y - s.y) < 30) {
+                s.active = false;
+                score += 10;
+                document.getElementById("score").innerText = score;
             }
         });
-
-        if(player.y > 600) setupLevel();
-        document.getElementById('sc').innerText = score;
     }
 
     function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        // פלטפורמות
-        ctx.fillStyle = "#1e293b";
-        platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, p.h));
+        // רצפה
+        ctx.fillStyle = "#555";
+        ctx.fillRect(0, canvas.height - 20, canvas.width, 20);
+
+        // שחקן (כחול)
+        ctx.fillStyle = "cyan";
+        ctx.fillRect(player.x, player.y, player.w, player.h);
+
+        // כוכב אדום
+        if (redStar.active) {
+            ctx.fillStyle = "red";
+            ctx.beginPath();
+            ctx.arc(redStar.x, redStar.y, redStar.r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // כפיל (אדום)
+        if (clone) {
+            ctx.fillStyle = "red";
+            ctx.fillRect(clone.x, clone.y, clone.w, clone.h);
+        }
 
         // כוכבים צהובים
-        ctx.fillStyle = "#fbbf24";
+        ctx.fillStyle = "yellow";
         stars.forEach(s => {
-            if(!s.collected) { ctx.beginPath(); ctx.arc(s.x, s.y, 8, 0, Math.PI*2); ctx.fill(); }
+            if (s.active) {
+                ctx.beginPath();
+                ctx.arc(s.x, s.y, 8, 0, Math.PI * 2);
+                ctx.fill();
+            }
         });
 
-        // הכוכב האדום (הכפיל)
-        if(!redStar.collected) {
-            ctx.fillStyle = "#ff4444";
-            ctx.shadowBlur = 15 + Math.sin(frames/5)*10; ctx.shadowColor = "red";
-            ctx.beginPath(); ctx.arc(redStar.x, redStar.y, 15, 0, Math.PI*2); ctx.fill();
-            ctx.shadowBlur = 0;
-        }
-
-        // כפיל
-        if(aiClone) {
-            ctx.fillStyle = "#ff4444";
-            ctx.shadowBlur = 10; ctx.shadowColor = "red";
-            ctx.fillRect(aiClone.x, aiClone.y, aiClone.w, aiClone.h);
-            ctx.shadowBlur = 0;
-        }
-
-        // שחקן
-        ctx.fillStyle = "#38bdf8";
-        ctx.fillRect(player.x, player.y, player.w, player.h);
+        requestAnimationFrame(() => {
+            update();
+            draw();
+        });
     }
 
-    function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
-    setupLevel();
-    gameLoop();
+    draw();
 </script>
 </body>
 </html>
