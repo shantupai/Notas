@@ -2,15 +2,11 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>הנוטאים - מתקפת המשוכפלים</title>
+    <title>הנוטאים - כפיל ה-AI האוטומטי</title>
     <style>
         body { margin: 0; background: #020617; overflow: hidden; font-family: sans-serif; }
         canvas { display: block; margin: 0 auto; background: #020617; }
         #stats { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-around; color: white; font-size: 20px; font-weight: bold; pointer-events: none; text-shadow: 2px 2px 4px #000; }
-        #bars { position: absolute; top: 45px; left: 50%; transform: translateX(-50%); width: 220px; display: flex; flex-direction: column; gap: 5px; }
-        .bar-bg { width: 100%; height: 8px; background: #1e293b; border-radius: 4px; display: none; overflow: hidden; border: 1px solid white; }
-        #super-progress { height: 100%; background: #38bdf8; width: 0%; }
-        #ghost-progress { height: 100%; background: #f472b6; width: 0%; }
         .hint { position: absolute; bottom: 10px; width: 100%; text-align: center; color: #94a3b8; font-size: 16px; }
     </style>
 </head>
@@ -18,14 +14,10 @@
     <div id="stats">
         <div>🚀 שלב: <span id="lvl">1</span></div>
         <div>❤️ חיים: <span id="hp">3</span></div>
-        <div style="color: #f87171;">👥 כפיל: <span id="cl-stat">לא פעיל</span></div>
+        <div style="color: #f87171;">🤖 כפיל אוטו': <span id="cl-stat">כבוי</span></div>
         <div>✨ כוכבים: <span id="sc">0</span></div>
     </div>
-    <div id="bars">
-        <div id="super-bar" class="bar-bg" style="border-color: #38bdf8;"><div id="super-progress"></div></div>
-        <div id="ghost-bar" class="bar-bg" style="border-color: #f472b6;"><div id="ghost-progress"></div></div>
-    </div>
-    <div class="hint">🔴 כוכב אדום = יוצר כפיל שאוסף כוכבים עבורך!</div>
+    <div class="hint">🔴 כוכב אדום = יוצר כפיל חכם שטס לאסוף עבורך את כל הכוכבים!</div>
     <canvas id="game"></canvas>
 
 <script>
@@ -33,36 +25,41 @@
     canvas.width = 1100; canvas.height = 550;
 
     let level = 1, score = 0, health = 3, frames = 0;
-    let player = { x: 50, y: 400, w: 25, h: 25, xv: 0, yv: 0, jumps: 0, invul: 0, superTimer: 0, ghostTimer: 0, maxSuper: 400, maxGhost: 300, hasShield: false };
-    let clone = null; // אובייקט הכפיל
-    let platforms = [], walls = [], stars = [], aliens = [], blueStar = null, purpleStar = null, pinkStar = null, redStar = null, spikes = [], particles = [], door = {};
+    let player = { x: 50, y: 400, w: 25, h: 25, xv: 0, yv: 0, jumps: 0, invul: 0, superTimer: 0, ghostTimer: 0, hasShield: false };
+    let aiClone = null; // הכפיל החכם
+    let platforms = [], walls = [], stars = [], aliens = [], items = [], spikes = [], door = {};
     let keys = {};
 
     function setupLevel() {
-        platforms = []; walls = []; stars = []; spikes = []; aliens = []; particles = [];
-        player.x = 50; player.y = 450; player.xv = 0; player.yv = 0; player.superTimer = 0; player.ghostTimer = 0; player.hasShield = false;
-        clone = null;
+        platforms = []; walls = []; stars = []; spikes = []; aliens = []; items = [];
+        player.x = 50; player.y = 450; player.xv = 0; player.yv = 0; player.superTimer = 0; player.hasShield = false;
+        aiClone = null;
         
         platforms.push({ x: 0, y: 520, w: 1100, h: 30 }); 
         walls.push({ x: 350, y: 150, w: 30, h: 300 }, { x: 750, y: 150, w: 30, h: 300 });
 
         for(let i=0; i<12; i++) {
-            let px = 100 + (i * 80);
-            let py = 150 + (Math.random() * 300);
+            let px = 100 + (i * 85); let py = 150 + (Math.random() * 300);
             platforms.push({ x: px, y: py, w: 90, h: 12 });
             if(i % 4 === 0) spikes.push({ x: px + 25, y: py - 8, w: 40 }); 
         }
 
-        for(let i=0; i < 6; i++) {
-            aliens.push({ x: 200 + Math.random()*800, y: 50 + Math.random()*400, baseY: 0, alive: true, offset: Math.random()*Math.PI*2, speed: 0.05 });
+        // יצירת כוכבים רגילים
+        for(let i=0; i<6; i++) stars.push({ x: 100 + Math.random()*900, y: 100 + Math.random()*300, collected: false, type: 'yellow' });
+        
+        // יצירת כוכבי כוח (items)
+        items = [
+            { x: 550, y: 250, type: 'blue', collected: false },
+            { x: 200 + Math.random()*700, y: 100 + Math.random()*200, type: 'purple', collected: false },
+            { x: 100 + Math.random()*800, y: 50 + Math.random()*150, type: 'pink', collected: false },
+            { x: 400 + Math.random()*300, y: 400, type: 'red', collected: false }
+        ];
+
+        for(let i=0; i < 5; i++) {
+            aliens.push({ x: 200 + Math.random()*800, y: 50 + Math.random()*400, baseY: 0, alive: true, offset: Math.random()*10 });
             aliens[i].baseY = aliens[i].y;
         }
 
-        for(let i=0; i<5; i++) stars.push({ x: 100 + Math.random()*900, y: 100 + Math.random()*300, collected: false });
-        blueStar = { x: 550, y: 250, collected: false };
-        purpleStar = { x: 200 + Math.random()*700, y: 100 + Math.random()*200, collected: false };
-        pinkStar = { x: 100 + Math.random()*800, y: 50 + Math.random()*150, collected: false };
-        redStar = { x: 400 + Math.random()*300, y: 400, collected: false };
         door = { x: 1020, y: 60, w: 40, h: 60 };
         platforms.push({ x: 1000, y: 120, w: 80, h: 12 });
     }
@@ -70,38 +67,12 @@
     window.onkeydown = e => keys[e.code] = true;
     window.onkeyup = e => keys[e.code] = false;
 
-    function handleCollect(target) {
-        stars.forEach(s => { if(!s.collected && Math.abs(target.x-s.x)<30 && Math.abs(target.y-s.y)<30){ s.collected=true; score+=50; removeAliens(1); }});
-        if(!blueStar.collected && Math.abs(target.x-blueStar.x)<30 && Math.abs(target.y-blueStar.y)<30) { blueStar.collected=true; player.superTimer=player.maxSuper; score+=100; removeAliens(3); }
-        if(!purpleStar.collected && Math.abs(target.x-purpleStar.x)<30 && Math.abs(target.y-purpleStar.y)<30) { purpleStar.collected=true; player.hasShield=true; score+=100; removeAliens(3); }
-        if(!pinkStar.collected && Math.abs(target.x-pinkStar.x)<30 && Math.abs(target.y-pinkStar.y)<30) { pinkStar.collected=true; player.ghostTimer=player.maxGhost; score+=150; removeAliens(2); }
-        if(!redStar.collected && Math.abs(target.x-redStar.x)<30 && Math.abs(target.y-redStar.y)<30) { redStar.collected=true; clone = { ...player, jumps: 0 }; score+=200; }
-    }
-
-    function removeAliens(count) {
-        let removed = 0;
-        for(let a of aliens) { if(a.alive && removed < count) { a.alive = false; removed++; } }
-    }
-
-    function updateEntity(ent, isClone) {
-        if(!ent) return;
-        if(keys.ArrowRight) ent.xv = 6; else if(keys.ArrowLeft) ent.xv = -6; else ent.xv *= 0.8;
-        
-        let touchingWall = null;
-        walls.forEach(w => { if(ent.x + ent.w + 5 > w.x && ent.x - 5 < w.x + w.w && ent.y < w.y + w.h && ent.y + ent.h > w.y) touchingWall = (ent.x < w.x) ? "left" : "right"; });
-        if(touchingWall && ent.yv > 0) { ent.yv = 2.5; ent.jumps = 0; } else ent.yv += 0.55;
-
-        if((keys.Space || keys.ArrowUp) && !player.jumpLock) {
-            if(touchingWall) { ent.yv = -12; ent.xv = (touchingWall === "left") ? -12 : 12; }
-            else if(ent.jumps < 2) { ent.yv = -11; ent.jumps++; }
-        }
-
-        ent.x += ent.xv; ent.y += ent.yv;
-        walls.forEach(w => { if(ent.x < w.x+w.w && ent.x+ent.w > w.x && ent.y < w.y+w.h && ent.y+ent.h > w.y) { if(ent.xv > 0 && ent.x < w.x) ent.x = w.x - ent.w; else if(ent.xv < 0 && ent.x > w.x) ent.x = w.x + w.w; }});
-        platforms.forEach(p => { if(ent.x < p.x+p.w && ent.x+ent.w > p.x && ent.y+ent.h > p.y && ent.y+ent.h < p.y+p.h+12 && ent.yv >= 0) { ent.y = p.y - ent.h; ent.yv = 0; ent.jumps = 0; }});
-        
-        handleCollect(ent);
-        if(ent.y > 600) { if(isClone) clone = null; else setupLevel(); }
+    function handleEffect(type) {
+        if(type === 'yellow') { score += 50; }
+        if(type === 'blue') { player.superTimer = 400; score += 100; }
+        if(type === 'purple') { player.hasShield = true; score += 100; }
+        if(type === 'pink') { player.ghostTimer = 300; score += 150; }
+        if(type === 'red') { aiClone = { x: player.x, y: player.y, w: 20, h: 20 }; score += 200; }
     }
 
     function update() {
@@ -110,16 +81,48 @@
         if(player.superTimer > 0) player.superTimer--;
         if(player.ghostTimer > 0) player.ghostTimer--;
 
-        document.getElementById('cl-stat').innerText = clone ? "פעיל" : "לא פעיל";
-        
-        updateEntity(player, false);
-        if(clone) updateEntity(clone, true);
-        if((keys.Space || keys.ArrowUp)) player.jumpLock = true; else player.jumpLock = false;
+        // תנועת שחקן
+        if(keys.ArrowRight) player.xv = 6; else if(keys.ArrowLeft) player.xv = -6; else player.xv *= 0.8;
+        player.yv += 0.55;
+        player.x += player.xv; player.y += player.yv;
 
+        // התנגשויות שחקן
+        platforms.forEach(p => { if(player.x < p.x+p.w && player.x+player.w > p.x && player.y+player.h > p.y && player.y+player.h < p.y+p.h+12 && player.yv >= 0) { player.y = p.y - player.h; player.yv = 0; player.jumps = 0; }});
+        walls.forEach(w => { if(player.x < w.x+w.w && player.x+player.w > w.x && player.y < w.y+w.h && player.y+player.h > w.y) { if(player.xv > 0 && player.x < w.x) player.x = w.x - player.w; else if(player.xv < 0 && player.x > w.x) player.x = w.x + w.w; }});
+
+        if((keys.Space || keys.ArrowUp) && player.yv === 0) player.yv = -12;
+
+        // לוגיקת AI לכפיל
+        if(aiClone) {
+            document.getElementById('cl-stat').innerText = "פעיל ומחפש!";
+            // מציאת הכוכב הקרוב ביותר
+            let target = null;
+            let minDist = Infinity;
+            [...stars, ...items].forEach(s => {
+                if(!s.collected) {
+                    let d = Math.hypot(s.x - aiClone.x, s.y - aiClone.y);
+                    if(d < minDist) { minDist = d; target = s; }
+                }
+            });
+
+            if(target) {
+                let dx = target.x - aiClone.x;
+                let dy = target.y - aiClone.y;
+                let angle = Math.atan2(dy, dx);
+                aiClone.x += Math.cos(angle) * 5; // מהירות הכפיל
+                aiClone.y += Math.sin(angle) * 5;
+
+                if(minDist < 20) { target.collected = true; handleEffect(target.type); }
+            }
+        } else { document.getElementById('cl-stat').innerText = "כבוי"; }
+
+        // בדיקת איסוף שחקן
+        stars.forEach(s => { if(!s.collected && Math.abs(player.x-s.x)<30 && Math.abs(player.y-s.y)<30){ s.collected=true; handleEffect(s.type); }});
+        items.forEach(i => { if(!i.collected && Math.abs(player.x-i.x)<30 && Math.abs(player.y-i.y)<30){ i.collected=true; handleEffect(i.type); }});
+
+        // נזק
         aliens.forEach(a => {
-            if(!a.alive) return;
-            a.y = a.baseY + Math.sin(frames * 0.05 + a.offset) * 35;
-            if(Math.abs(player.x - a.x) < 25 && Math.abs(player.y - a.y) < 25) {
+            if(a.alive && Math.abs(player.x - a.x) < 25 && Math.abs(player.y - a.y) < 25) {
                 if(player.superTimer > 0) a.alive = false; 
                 else if(player.ghostTimer <= 0 && player.invul <= 0) {
                     if(player.hasShield) { player.hasShield = false; player.invul = 60; }
@@ -129,6 +132,8 @@
         });
 
         if(Math.abs(player.x-door.x)<40 && Math.abs(player.y-door.y)<50) { level++; setupLevel(); }
+        if(player.y > 600) setupLevel();
+        
         document.getElementById('sc').innerText = score;
         document.getElementById('hp').innerText = health;
         document.getElementById('lvl').innerText = level;
@@ -144,27 +149,33 @@
 
         aliens.forEach(a => { if(a.alive) { ctx.fillStyle = "#f43f5e"; ctx.beginPath(); ctx.arc(a.x+15, a.y+15, 10, 0, Math.PI*2); ctx.fill(); }});
 
-        // כוכבים
+        // ציור כוכבים
         stars.forEach(s => { if(!s.collected) { ctx.fillStyle = "#fbbf24"; ctx.beginPath(); ctx.arc(s.x, s.y, 8, 0, Math.PI*2); ctx.fill(); }});
-        if(!blueStar.collected) { ctx.fillStyle = "#38bdf8"; ctx.beginPath(); ctx.arc(blueStar.x, blueStar.y, 10, 0, Math.PI*2); ctx.fill(); }
-        if(!purpleStar.collected) { ctx.fillStyle = "#a78bfa"; ctx.beginPath(); ctx.arc(purpleStar.x, purpleStar.y, 10, 0, Math.PI*2); ctx.fill(); }
-        if(!pinkStar.collected) { ctx.fillStyle = "#f472b6"; ctx.beginPath(); ctx.arc(pinkStar.x, pinkStar.y, 10, 0, Math.PI*2); ctx.fill(); }
-        if(!redStar.collected) { ctx.fillStyle = "#f87171"; ctx.beginPath(); ctx.arc(redStar.x, redStar.y, 12, 0, Math.PI*2); ctx.fill(); }
+        items.forEach(i => {
+            if(i.collected) return;
+            if(i.type === 'blue') ctx.fillStyle = "#38bdf8";
+            else if(i.type === 'purple') ctx.fillStyle = "#a78bfa";
+            else if(i.type === 'pink') ctx.fillStyle = "#f472b6";
+            else if(i.type === 'red') ctx.fillStyle = "#f87171";
+            ctx.beginPath(); ctx.arc(i.x, i.y, 11, 0, Math.PI*2); ctx.fill();
+        });
 
         ctx.fillStyle = "#8b5cf6"; ctx.fillRect(door.x, door.y, door.w, door.h);
 
         // שחקן
-        ctx.fillStyle = player.superTimer > 0 ? "white" : (player.ghostTimer > 0 ? "rgba(244,114,182,0.4)" : "#38bdf8");
+        ctx.fillStyle = player.ghostTimer > 0 ? "rgba(244,114,182,0.4)" : "#38bdf8";
         ctx.fillRect(player.x, player.y, player.w, player.h);
         if(player.hasShield) { ctx.strokeStyle = "#a78bfa"; ctx.strokeRect(player.x-5, player.y-5, player.w+10, player.h+10); }
 
-        // ציור הכפיל
-        if(clone) {
-            ctx.fillStyle = "rgba(248, 113, 113, 0.6)"; // אדום שקוף
-            ctx.strokeStyle = "#f87171";
-            ctx.lineWidth = 2;
-            ctx.fillRect(clone.x, clone.y, clone.w, clone.h);
-            ctx.strokeRect(clone.x, clone.y, clone.w, clone.h);
+        // ציור הכפיל האוטומטי
+        if(aiClone) {
+            ctx.fillStyle = "#f87171";
+            ctx.shadowBlur = 10; ctx.shadowColor = "red";
+            ctx.fillRect(aiClone.x, aiClone.y, aiClone.w, aiClone.h);
+            ctx.shadowBlur = 0;
+            // קו שמראה לאן הוא הולך
+            ctx.strokeStyle = "rgba(248, 113, 113, 0.3)";
+            ctx.beginPath(); ctx.moveTo(aiClone.x+10, aiClone.y+10); ctx.lineTo(player.x+12, player.y+12); ctx.stroke();
         }
     }
 
