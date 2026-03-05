@@ -1,110 +1,56 @@
 <!DOCTYPE html>
-<html lang="he">
-<head>
-    <meta charset="UTF-8">
-    <title>המשחק של הכפיל האדום</title>
-    <style>
-        body { margin: 0; background: #1a1a1a; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; color: white; font-family: sans-serif; }
-        canvas { background: #000; border: 5px solid #333; box-shadow: 0 0 20px rgba(0,0,0,0.5); display: none; }
-        #startBtn { padding: 20px 40px; font-size: 24px; cursor: pointer; background: #38bdf8; border: none; border-radius: 10px; color: white; font-weight: bold; }
-        #instructions { margin-bottom: 20px; text-align: center; }
-    </style>
-</head>
-<body>
-
-    <div id="ui">
-        <div id="instructions">
-            <h1>המשחק מוכן!</h1>
-            <p>חצים במקלדת כדי לזוז | הריבוע האדום הוא הכפיל שלך - הוא זז לבד</p>
-        </div>
-        <button id="startBtn">לחץ כאן להתחלת המשחק</button>
-    </div>
-
-    <canvas id="gameCanvas"></canvas>
+<html>
+<body style="background:#000; color:#fff; text-align:center; font-family:sans-serif;">
+    <h2>המשחק של הכפיל האדום</h2>
+    <p>זוז עם החצים | הריבוע האדום אוסף כוכבים לבד</p>
+    <canvas id="g" style="background:#111; border:2px solid #fff;"></canvas>
 
 <script>
-    const canvas = document.getElementById("gameCanvas");
-    const ctx = canvas.getContext("2d");
-    const startBtn = document.getElementById("startBtn");
-    const ui = document.getElementById("ui");
+    const c = document.getElementById("g");
+    const x = c.getContext("2d");
+    c.width = 600; c.height = 400;
 
-    canvas.width = 800;
-    canvas.height = 500;
-
-    let player = { x: 50, y: 400, w: 30, h: 30, xv: 0, yv: 0 };
-    let clone = { x: 400, y: 100, w: 20, h: 20 }; // הכפיל האדום
+    let p = {x:50, y:350, xv:0, yv:0}; // שחקן
+    let cl = {x:300, y:100}; // כפיל אדום
     let stars = [];
     let keys = {};
-    let gameRunning = false;
 
-    // יצירת 15 כוכבים צהובים
-    for(let i=0; i<15; i++) {
-        stars.push({ x: Math.random()*740+30, y: Math.random()*400+30, active: true });
-    }
+    // יצירת כוכבים
+    for(let i=0; i<10; i++) stars.push({x: Math.random()*550, y: Math.random()*350, a:true});
 
-    startBtn.addEventListener("click", () => {
-        ui.style.display = "none";
-        canvas.style.display = "block";
-        gameRunning = true;
-        loop();
-    });
+    window.onkeydown = e => keys[e.code] = true;
+    window.onkeyup = e => keys[e.code] = false;
 
-    window.addEventListener("keydown", e => keys[e.code] = true);
-    window.addEventListener("keyup", e => keys[e.code] = false);
+    function draw() {
+        // תנועה
+        if(keys.ArrowRight) p.xv = 4; else if(keys.ArrowLeft) p.xv = -4; else p.xv = 0;
+        p.yv += 0.5; p.x += p.xv; p.y += p.yv;
+        if(p.y > 370) { p.y = 370; p.yv = 0; }
+        if(keys.ArrowUp && p.y === 370) p.yv = -10;
 
-    function loop() {
-        if(!gameRunning) return;
-
-        // תנועת שחקן
-        if(keys.ArrowRight) player.xv = 5;
-        else if(keys.ArrowLeft) player.xv = -5;
-        else player.xv = 0;
-        
-        player.yv += 0.5; // גרביטציה
-        player.x += player.xv;
-        player.y += player.yv;
-
-        // רצפה
-        if(player.y > 450) { player.y = 450; player.yv = 0; }
-        if(keys.ArrowUp && player.y === 450) player.yv = -12;
-
-        // בינה מלאכותית לכפיל - טס לכוכב הקרוב ביותר
-        let target = stars.find(s => s.active);
-        if(target) {
-            let dx = target.x - clone.x;
-            let dy = target.y - clone.y;
-            let dist = Math.sqrt(dx*dx + dy*dy);
-            
-            if(dist > 5) {
-                clone.x += (dx/dist) * 5; // מהירות הכפיל
-                clone.y += (dy/dist) * 5;
-            }
-            
-            if(dist < 15) target.active = false; // אוסף את הכוכב
+        // הכפיל האדום מחפש כוכב
+        let t = stars.find(s => s.a);
+        if(t) {
+            let dx = t.x - cl.x;
+            let dy = t.y - cl.y;
+            let d = Math.sqrt(dx*dx + dy*dy);
+            cl.x += (dx/d) * 3;
+            cl.y += (dy/d) * 3;
+            if(d < 10) t.a = false;
         }
 
-        // ציור
-        ctx.fillStyle = "black";
-        ctx.fillRect(0,0,canvas.width,canvas.height);
+        // ציור הכל
+        x.fillStyle = "#111"; x.fillRect(0,0,600,400);
+        
+        x.fillStyle = "cyan"; x.fillRect(p.x, p.y, 25, 25); // שחקן
+        x.fillStyle = "red"; x.fillRect(cl.x, cl.y, 20, 20); // כפיל
+        
+        x.fillStyle = "yellow"; // כוכבים
+        stars.forEach(s => { if(s.a) { x.beginPath(); x.arc(s.x, s.y, 5, 0, 7); x.fill(); }});
 
-        // שחקן (כחול שמיים)
-        ctx.fillStyle = "#38bdf8";
-        ctx.fillRect(player.x, player.y, player.w, player.h);
-
-        // כפיל (אדום)
-        ctx.fillStyle = "#ff4444";
-        ctx.fillRect(clone.x, clone.y, clone.w, clone.h);
-
-        // כוכבים (צהוב זוהר)
-        ctx.fillStyle = "#fbbf24";
-        stars.forEach(s => {
-            if(s.active) {
-                ctx.beginPath(); ctx.arc(s.x, s.y, 8, 0, Math.PI*2); ctx.fill();
-            }
-        });
-
-        requestAnimationFrame(loop);
+        requestAnimationFrame(draw);
     }
+    draw();
 </script>
 </body>
 </html>
