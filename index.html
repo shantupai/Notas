@@ -2,19 +2,19 @@
 <html lang="he" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>הנוטאים - תיקון טיפוס קירות</title>
+    <title>הנוטאים - הכוכב האדום נמצא!</title>
     <style>
         body { margin: 0; background: #020617; overflow: hidden; font-family: sans-serif; }
         canvas { display: block; margin: 0 auto; background: #0b0f19; border: 2px solid #334155; }
-        #stats { position: absolutae; top: 10px; width: 100%; display: flex; justify-content: space-around; color: white; font-size: 18px; pointer-events: none; }
+        #stats { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-around; color: white; font-size: 18px; pointer-events: none; }
     </style>
 </head>
 <body>
     <div id="stats">
         <div>🚀 שלב: <span id="lvl">1</span> | ❤️ חיים: <span id="hp">3</span> | ✨ כוכבים: <span id="sc">0</span></div>
     </div>
-    <div style="position: absolute; bottom: 20px; width: 100%; text-align: center; color: #64748b;">
-        טיפ: היצמד לקיר עם החצים ופשוט תלחץ **רווח** כדי לזנק למעלה!
+    <div style="position: absolute; bottom: 20px; width: 100%; text-align: center; color: #f87171; font-weight: bold;">
+        הכוכב האדום נמצא ממש מעליך בהתחלה! קפוץ שמאלה ולמעלה.
     </div>
     <canvas id="game"></canvas>
 
@@ -23,31 +23,34 @@
     canvas.width = 1100; canvas.height = 550;
 
     let level = 1, score = 0, health = 3, frames = 0;
-    let player = { x: 50, y: 450, w: 25, h: 25, xv: 0, yv: 0, jumps: 0, invul: 0, superTimer: 0, ghostTimer: 0, hasShield: false };
+    let player = { x: 50, y: 450, w: 25, h: 25, xv: 0, yv: 0, jumps: 0, invul: 0 };
     let aiClone = null;
-    let platforms = [], walls = [], stars = [], items = [], aliens = [], spikes = [], door = {};
+    let platforms = [], walls = [], stars = [], items = [];
     let keys = {};
 
     function setupLevel() {
-        platforms = []; walls = []; stars = []; spikes = []; aliens = []; items = [];
-        player.x = 50; player.y = 450; player.xv = 0; player.yv = 0;
+        platforms = []; walls = []; stars = []; items = [];
+        player.x = 100; player.y = 450; player.xv = 0; player.yv = 0;
         aiClone = null;
 
-        // רצפה וקירות ברורים לטיפוס
+        // רצפה
         platforms.push({ x: 0, y: 520, w: 1100, h: 30 }); 
-        walls.push({ x: 400, y: 100, w: 40, h: 350 }); // קיר מרכזי לטיפוס
-        walls.push({ x: 700, y: 100, w: 40, h: 350 });
+        
+        // קירות לטיפוס
+        walls.push({ x: 400, y: 150, w: 40, h: 300 });
 
-        // פלטפורמות עזר
-        for(let i=0; i<8; i++) {
-            platforms.push({ x: 100 + i*120, y: 400 - i*30, w: 80, h: 10 });
-        }
+        // פלטפורמות - הראשונה נמצאת מעל השחקן
+        platforms.push({ x: 50, y: 350, w: 100, h: 10 }); // כאן יהיה הכוכב האדום!
+        platforms.push({ x: 250, y: 250, w: 100, h: 10 });
+        platforms.push({ x: 500, y: 200, w: 100, h: 10 });
 
-        // כוכבים ופריטים
-        stars.push({ x: 450, y: 150, type: 'yellow', collected: false });
-        items.push({ x: 150, y: 150, type: 'red', collected: false }); // כוכב אדום לכפיל
+        // הכוכב האדום במיקום קבוע וקל למציאה
+        items.push({ x: 100, y: 330, type: 'red', collected: false });
 
-        door = { x: 1020, y: 60, w: 40, h: 60 };
+        // כוכבים צהובים רגילים
+        stars.push({ x: 300, y: 200, type: 'yellow', collected: false });
+        stars.push({ x: 600, y: 150, type: 'yellow', collected: false });
+
         document.getElementById('lvl').innerText = level;
     }
 
@@ -56,14 +59,13 @@
 
     function update() {
         frames++;
-        if(player.invul > 0) player.invul--;
-
-        // תנועה אופקית
+        
+        // תנועת שחקן
         if(keys.ArrowRight) player.xv = 6;
         else if(keys.ArrowLeft) player.xv = -6;
         else player.xv *= 0.8;
 
-        // בדיקת נגיעה בקיר (Wall Detection)
+        // טיפוס קירות משופר
         let wallSide = null;
         walls.forEach(w => {
             if (player.y + player.h > w.y && player.y < w.y + w.h) {
@@ -72,19 +74,17 @@
             }
         });
 
-        // פיזיקת קיר
         if (wallSide && player.yv > 0) {
-            player.yv = 1.5; // "חיכוך" - החלקה איטית מאוד על הקיר
-            player.jumps = 0; // מאפס קפיצות כשנוגעים בקיר
+            player.yv = 1.5; 
+            player.jumps = 0;
         } else {
-            player.yv += 0.6; // גרביטציה רגילה
+            player.yv += 0.6;
         }
 
-        // קפיצת קיר (Wall Jump)
         if ((keys.Space || keys.ArrowUp) && !player.jumpLock) {
             if (wallSide) {
-                player.yv = -14; // זינוק חזק למעלה
-                player.xv = (wallSide === "left") ? -10 : 10; // זינוק הצידה מהקיר
+                player.yv = -14;
+                player.xv = (wallSide === "left") ? -10 : 10;
                 player.jumpLock = true;
             } else if (player.yv === 0 || player.jumps < 1) {
                 player.yv = -12;
@@ -97,7 +97,7 @@
         player.x += player.xv;
         player.y += player.yv;
 
-        // התנגשויות (מניעת מעבר דרך קירות)
+        // התנגשויות
         walls.forEach(w => {
             if(player.x < w.x+w.w && player.x+player.w > w.x && player.y < w.y+w.h && player.y+player.h > w.y) {
                 if(player.xv > 0 && player.x < w.x) player.x = w.x - player.w;
@@ -111,16 +111,15 @@
             }
         });
 
-        // לוגיקת כפיל AI (הכוכב האדום)
+        // לוגיקת כפיל AI
         if(aiClone) {
             let target = [...stars, ...items].find(s => !s.collected);
             if(target) {
                 let angle = Math.atan2(target.y - aiClone.y, target.x - aiClone.x);
-                aiClone.x += Math.cos(angle) * 5;
-                aiClone.y += Math.sin(angle) * 5;
+                aiClone.x += Math.cos(angle) * 6;
+                aiClone.y += Math.sin(angle) * 6;
                 if(Math.hypot(target.x - aiClone.x, target.y - aiClone.y) < 20) {
                     target.collected = true; score += 100;
-                    if(target.type === 'red') aiClone = {x: player.x, y: player.y, w: 20, h: 20};
                 }
             }
         }
@@ -146,16 +145,26 @@
         ctx.fillStyle = "#1e293b";
         platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, p.h));
 
+        // ציור הכוכבים
         stars.concat(items).forEach(s => {
             if(!s.collected) {
-                ctx.fillStyle = s.type === 'red' ? "#ef4444" : "#fbbf24";
-                ctx.beginPath(); ctx.arc(s.x, s.y, 10, 0, Math.PI*2); ctx.fill();
+                if(s.type === 'red') {
+                    // הילה אדומה לכוכב האדום
+                    ctx.shadowBlur = 20; ctx.shadowColor = "red";
+                    ctx.fillStyle = "#ff4444";
+                } else {
+                    ctx.shadowBlur = 0; ctx.fillStyle = "#fbbf24";
+                }
+                ctx.beginPath(); ctx.arc(s.x, s.y, 12, 0, Math.PI*2); ctx.fill();
+                ctx.shadowBlur = 0;
             }
         });
 
         if(aiClone) {
-            ctx.fillStyle = "rgba(239, 68, 68, 0.7)";
+            ctx.fillStyle = "#ef4444";
+            ctx.shadowBlur = 15; ctx.shadowColor = "red";
             ctx.fillRect(aiClone.x, aiClone.y, aiClone.w, aiClone.h);
+            ctx.shadowBlur = 0;
         }
 
         ctx.fillStyle = "#38bdf8";
