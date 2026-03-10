@@ -2,83 +2,81 @@
 <html lang="he">
 <head>
     <meta charset="UTF-8">
-    <title>הרפתקת החשבון המשתנה</title>
+    <title>פינגווין בים - הרפתקת חשבון</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
     <style>
-        body { margin: 0; background: #050505; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: 'Arial', sans-serif; }
-        canvas { border: 4px solid #555; border-radius: 12px; box-shadow: 0 0 40px rgba(0,255,255,0.2); }
+        body { margin: 0; background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: 'Arial', sans-serif; }
+        canvas { border: 5px solid #fff; border-radius: 15px; }
         #math-ui {
-            position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
-            background: linear-gradient(135deg, #ffffff, #f0f0f0); padding: 30px; border-radius: 25px;
-            text-align: center; display: none; border: 8px solid #4a69bd; z-index: 10; box-shadow: 0 15px 30px rgba(0,0,0,0.4);
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(255, 255, 255, 0.95); padding: 30px; border-radius: 25px;
+            text-align: center; display: none; border: 6px solid #3498db; z-index: 10;
         }
-        #math-ui input { font-size: 35px; width: 120px; text-align: center; border: 4px solid #4a69bd; border-radius: 15px; }
+        #math-ui input { font-size: 35px; width: 120px; text-align: center; border: 3px solid #3498db; border-radius: 10px; }
     </style>
 </head>
 <body>
 
 <div id="math-ui">
-    <h2 id="question" style="font-size: 32px; color: #1e3799;">?</h2>
+    <h2 id="question" style="color: #2c3e50;">?</h2>
     <input type="number" id="answer-input" />
-    <p style="font-weight: bold; color: #4a69bd;">תשובה + Enter</p>
+    <p>הקש תשובה ו-Enter</p>
 </div>
 
 <script>
 const config = {
     type: Phaser.AUTO,
     width: 800, height: 600,
-    physics: { default: 'arcade', arcade: { gravity: { y: 900 }, debug: false } },
+    physics: { default: 'arcade', arcade: { gravity: { y: 0 }, debug: false } },
     scene: { preload: preload, create: create, update: update }
 };
 
-let p1, p2, ball, aliens, fishGroup, platforms, ladders, door, cheerleader;
+let player, baby, fishes, bubbles, cursors;
 let score = 0, level = 1, isMathActive = false, currentFish = null, correctAnswer;
-let cursors, keys;
+let hasFish = false; // האם הפינגווין מחזיק דג כרגע?
 
 const game = new Phaser.Game(config);
 
 function preload() {}
 
 function create() {
-    this.cameras.main.setBackgroundColor('#0f0c29');
-    
-    // יצירת קבוצות
-    platforms = this.physics.add.staticGroup();
-    ladders = this.physics.add.staticGroup();
-    aliens = this.physics.add.group();
-    fishGroup = this.physics.add.group();
+    // צבע רקע משתנה לפי שלב
+    const oceanColors = [0x0fbcf9, 0x0652dd, 0x128937, 0x833471, 0x2c3e50];
+    this.cameras.main.setBackgroundColor(oceanColors[(level - 1) % oceanColors.length]);
 
-    drawEnhancedAssets(this);
-    setupLevel(this);
+    // יצירת בועות ברקע
+    bubbles = this.add.group();
+    for(let i=0; i<20; i++) {
+        let b = this.add.circle(Math.random()*800, Math.random()*600, Math.random()*5, 0xffffff, 0.3);
+        bubbles.add(b);
+    }
 
-    // שחקנים
-    p1 = this.physics.add.sprite(60, 520, 'p1_tex').setCollideWorldBounds(true);
-    p2 = this.physics.add.sprite(120, 520, 'p2_tex').setCollideWorldBounds(true);
+    drawAssets(this);
 
-    // מעודד
-    cheerleader = this.add.sprite(40, 550, 'p1_tex').setScale(0.7).setTint(0x00ffff);
-    this.tweens.add({ targets: cheerleader, y: 530, duration: 400, yoyo: true, repeat: -1 });
+    // הגוזל (הפינגווין הקטן) - מחכה בפינה
+    baby = this.physics.add.sprite(750, 50, 'baby_tex');
+    this.add.text(710, 80, "הגוזל", {fontSize: '16px', fill: '#fff', backgroundColor: '#000'});
 
-    // כדור וחייזרים
-    ball = this.physics.add.sprite(400, 500, 'ball_tex').setBounce(0.9).setCollideWorldBounds(true).setDragX(60);
-    createAlien(this, 300, 500);
-    createAlien(this, 500, 500);
+    // הפינגווין השוחה
+    player = this.physics.add.sprite(100, 300, 'player_tex').setCollideWorldBounds(true);
 
-    // שליטה
+    // דגים
+    fishes = this.physics.add.group();
+    spawnFishes(this);
+
     cursors = this.input.keyboard.createCursorKeys();
-    keys = this.input.keyboard.addKeys('W,A,D');
 
-    // התנגשויות
-    this.physics.add.collider([p1, p2, aliens, ball], platforms);
-    this.physics.add.overlap([p1, p2], fishGroup, (p, f) => { if (!isMathActive) startMath(f); }, null, this);
-    this.physics.add.overlap([p1, p2], [aliens, ball], (p, t) => { if(!p.isFunny) makeFunny(this, p); }, null, this);
-    
-    this.physics.add.overlap([p1, p2], door, () => {
-        if (score >= 4) {
-            level++;
-            alert("עוברים לשלב " + level + "!");
-            score = 0;
-            this.scene.restart();
+    // התנגשות עם דג
+    this.physics.add.overlap(player, fishes, (p, f) => {
+        if (!isMathActive && !hasFish) {
+            startMath(f);
+        }
+    }, null, this);
+
+    // התנגשות עם הגוזל
+    this.physics.add.overlap(player, baby, () => {
+        if (hasFish) {
+            feedBaby();
         }
     }, null, this);
 
@@ -86,135 +84,100 @@ function create() {
 }
 
 function update() {
-    if (isMathActive) { p1.setVelocity(0); p2.setVelocity(0); return; }
+    if (isMathActive) { player.setVelocity(0); return; }
 
-    movePlayer(p1, cursors.left, cursors.right, cursors.up);
-    movePlayer(p2, keys.A, keys.D, keys.W);
+    // תנועת שחייה חופשית
+    const speed = 250;
+    if (cursors.left.isDown) { player.setVelocityX(-speed); player.setFlipX(true); }
+    else if (cursors.right.isDown) { player.setVelocityX(speed); player.setFlipX(false); }
+    else player.setVelocityX(0);
 
-    aliens.children.iterate(a => {
-        let dist = ball.x - a.x;
-        a.setVelocityX(dist > 0 ? 150 : -150);
-        if (Math.abs(dist) < 30) ball.setVelocityY(-250).setVelocityX(dist * 10);
-    });
-}
+    if (cursors.up.isDown) player.setVelocityY(-speed);
+    else if (cursors.down.isDown) player.setVelocityY(speed);
+    else player.setVelocityY(0);
 
-function setupLevel(scene) {
-    // רצפה קבועה
-    createPlatform(400, 585, 800, 30, 0x222f3e);
-
-    // יצירת מדרגות וסולמות בצורה אקראית לפי השלב
-    let heights = [450, 320, 180];
-    heights.forEach((h, i) => {
-        let xPos = (level % 2 === 0) ? (200 + i*100) : (600 - i*100);
-        createPlatform(xPos, h, 300, 20, 0x576574);
-        drawLadder(scene, xPos + (i%2==0 ? 100 : -100), h + 65, 130);
-        
-        // הוספת דג בכל קומה
-        let f = fishGroup.create(xPos, h - 40, 'fish_tex');
-        f.body.allowGravity = false;
+    // הנפשת בועות
+    bubbles.children.iterate(b => {
+        b.y -= 1;
+        if (b.y < -10) b.y = 610;
     });
 
-    // דג נוסף על הרצפה
-    fishGroup.create(700, 540, 'fish_tex').body.allowGravity = false;
-
-    // דלת
-    door = scene.add.rectangle(750, 100, 60, 90, 0xff4757);
-    scene.physics.add.existing(door, true);
-    scene.add.text(725, 40, "יציאה", {fontSize:'14px', color:'#fff', fontStyle:'bold'});
-}
-
-function movePlayer(p, l, r, u) {
-    p.body.allowGravity = true;
-    if (l.isDown) { p.setVelocityX(-220); p.setFlipX(true); }
-    else if (r.isDown) { p.setVelocityX(220); p.setFlipX(false); }
-    else p.setVelocityX(0);
-
-    game.scene.scenes[0].physics.overlap(p, ladders, () => {
-        if (u.isDown) { p.setVelocityY(-200); p.body.allowGravity = false; }
-    });
-    if (u.isDown && p.body.touching.down) p.setVelocityY(-480);
-}
-
-function startMath(fish) {
-    isMathActive = true; currentFish = fish;
-    let n1 = Math.floor(Math.random() * 10) + level;
-    let n2 = Math.floor(Math.random() * 9) + 1;
-    correctAnswer = n1 + n2;
-    document.getElementById('question').innerText = `כמה זה ${n1} + ${n2}?`;
-    document.getElementById('math-ui').style.display = 'block';
-    document.getElementById('answer-input').value = ''; document.getElementById('answer-input').focus();
-}
-
-function checkAns() {
-    if (parseInt(document.getElementById('answer-input').value) === correctAnswer) {
-        document.getElementById('math-ui').style.display = 'none';
-        isMathActive = false; currentFish.destroy();
-        score++; if (score >= 4) door.setFillStyle(0x2ed573);
+    // אם יש דג, הוא עוקב אחרי הפינגווין
+    if (hasFish && currentFish) {
+        currentFish.x = player.x;
+        currentFish.y = player.y;
     }
 }
 
-function makeFunny(scene, p) {
-    p.isFunny = true; p.setScale(2); p.setAngle(15);
-    scene.time.addEvent({ delay: 1500, callback: () => { p.setScale(1); p.setAngle(0); p.isFunny = false; }});
+function spawnFishes(scene) {
+    for(let i=0; i<3; i++) {
+        let x = Phaser.Math.Between(100, 700);
+        let y = Phaser.Math.Between(100, 500);
+        fishes.create(x, y, 'fish_tex').body.allowGravity = false;
+    }
 }
 
-function drawEnhancedAssets(s) {
-    // פינגווין משופר
+function startMath(fish) {
+    isMathActive = true;
+    currentFish = fish;
+    let n1 = Math.floor(Math.random() * 10) + level;
+    let n2 = Math.floor(Math.random() * 10);
+    correctAnswer = n1 + n2;
+    document.getElementById('question').innerText = `תפסנו דג! כמה זה ${n1} + ${n2}?`;
+    document.getElementById('math-ui').style.display = 'block';
+    document.getElementById('answer-input').value = ''; 
+    document.getElementById('answer-input').focus();
+}
+
+function checkAns() {
+    let val = parseInt(document.getElementById('answer-input').value);
+    if (val === correctAnswer) {
+        document.getElementById('math-ui').style.display = 'none';
+        isMathActive = false;
+        hasFish = true; // עכשיו הפינגווין מחזיק את הדג
+        currentFish.setAlpha(0.7); // הדג הופך לסימן שסוחבים אותו
+        alert("נכון! עכשיו הבא את הדג לגוזל הקטן");
+    } else {
+        alert("טעות, נסה שוב!");
+    }
+}
+
+function feedBaby() {
+    hasFish = false;
+    currentFish.destroy();
+    currentFish = null;
+    score++;
+    
+    if (score >= 3) {
+        level++;
+        alert("כל הכבוד! הגוזל שבע. עוברים לים הבא!");
+        score = 0;
+        game.scene.scenes[0].scene.restart();
+    } else {
+        alert("הגוזל אכל! נשארו עוד דגים בים.");
+    }
+}
+
+function drawAssets(s) {
+    // פינגווין שוחה (במבט צד/על)
     let g1 = s.make.graphics();
-    g1.fillStyle(0x000000); g1.fillEllipse(15, 25, 30, 45); // גוף
-    g1.fillStyle(0xffffff); g1.fillEllipse(15, 32, 22, 30); // בטן
-    g1.fillStyle(0x000000); g1.fillCircle(10, 15, 4); g1.fillCircle(20, 15, 4); // עיניים
-    g1.fillStyle(0xffa500); g1.fillTriangle(13, 18, 17, 18, 15, 25); // מקור
-    g1.generateTexture('p1_tex', 30, 50);
+    g1.fillStyle(0x222222); g1.fillEllipse(20, 15, 40, 25); // גוף מאורך לשחייה
+    g1.fillStyle(0xffffff); g1.fillEllipse(20, 15, 25, 15); // בטן
+    g1.fillStyle(0xffa500); g1.fillTriangle(35, 12, 35, 18, 45, 15); // מקור
+    g1.generateTexture('player_tex', 50, 30);
 
-    // נמר משופר
+    // גוזל פינגווין
     let g2 = s.make.graphics();
-    g2.fillStyle(0xff9f43); g2.fillEllipse(15, 25, 30, 45);
-    g2.fillStyle(0x222222); // פסים עבים יותר
-    for(let i=18; i<45; i+=10) { g2.fillRect(4, i, 8, 3); g2.fillRect(18, i+4, 8, 3); }
-    g2.generateTexture('p2_tex', 30, 50);
-
-    // כדורגל
-    let gb = s.make.graphics();
-    gb.fillStyle(0xffffff); gb.fillCircle(10, 10, 10);
-    gb.fillStyle(0x000000); gb.fillCircle(10, 10, 4);
-    gb.generateTexture('ball_tex', 20, 20);
+    g2.fillStyle(0x777777); g2.fillCircle(15, 15, 15);
+    g2.fillStyle(0xffffff); g2.fillCircle(15, 15, 8);
+    g2.fillStyle(0x000000); g2.fillCircle(10, 12, 2); g2.fillCircle(20, 12, 2);
+    g2.generateTexture('baby_tex', 30, 30);
 
     // דג
     let gf = s.make.graphics();
-    gf.fillStyle(0x54a0ff); gf.fillEllipse(15, 10, 26, 16);
-    gf.fillStyle(0x2e86de); gf.fillTriangle(0, 4, 0, 16, 10, 10);
+    gf.fillStyle(0xff7f50); gf.fillEllipse(15, 10, 25, 15);
+    gf.fillTriangle(0, 5, 0, 15, 10, 10);
     gf.generateTexture('fish_tex', 30, 20);
-
-    // חייזר
-    let ga = s.make.graphics();
-    ga.fillStyle(0x1dd1a1); ga.fillCircle(20, 20, 18);
-    ga.fillStyle(0xffffff); ga.fillCircle(20, 15, 10); // עין גדולה אחת
-    ga.fillStyle(0x000000); ga.fillCircle(20, 15, 4);
-    ga.generateTexture('alien_tex', 40, 40);
-}
-
-function drawLadder(scene, x, y, h) {
-    let g = scene.add.graphics();
-    g.lineStyle(4, 0xa39391);
-    g.strokeLineShape(new Phaser.Geom.Line(5, 0, 5, h));
-    g.strokeLineShape(new Phaser.Geom.Line(30, 0, 30, h));
-    for(let i=10; i<h; i+=25) g.strokeLineShape(new Phaser.Geom.Line(5, i, 30, i));
-    let k = 'lad'+x+y+level;
-    g.generateTexture(k, 35, h);
-    ladders.create(x, y, k);
-    g.destroy();
-}
-
-function createPlatform(x, y, w, h, color) {
-    let g = game.scene.scenes[0].add.rectangle(x, y, w, h, color);
-    game.scene.scenes[0].physics.add.existing(g, true);
-    platforms.add(g);
-}
-
-function createAlien(scene, x, y) {
-    let a = aliens.create(x, y, 'alien_tex');
-    a.setCollideWorldBounds(true).setBounce(0.3);
 }
 </script>
 </body>
