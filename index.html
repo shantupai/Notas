@@ -2,11 +2,11 @@
 <html lang="he">
 <head>
     <meta charset="UTF-8">
-    <title>פינגווין נגד חייזרים</title>
+    <title>עולם הפינגווין והקופים</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
     <style>
-        body { margin: 0; background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
-        canvas { border: 2px solid #fff; }
+        body { margin: 0; background: #222; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+        canvas { border: 4px solid #333; border-radius: 8px; }
     </style>
 </head>
 <body>
@@ -23,114 +23,145 @@ const config = {
     scene: { preload: preload, create: create, update: update }
 };
 
-let player, stars, platforms, cursors, ladders, door, cheerer, aliens;
-let score = 0;
-let level = 1;
+let player, stars, platforms, cursors, ladders, door, monkeys, level = 1, score = 0;
 
 const game = new Phaser.Game(config);
 
-function preload() {
-    // אין צורך בטעינת תמונות חיצוניות - נשתמש בגרפיקה מובנית
-}
+function preload() {} // הכל מצויר בקוד כדי למנוע שגיאות טעינה
 
 function create() {
-    // רקע
-    this.add.rectangle(400, 300, 800, 600, 0x000033); // שמיים כהים
+    // רקע שמיים
+    this.add.rectangle(400, 300, 800, 600, 0x87CEEB);
 
-    // פלטפורמות (מלבנים אפורים)
+    // יצירת קבוצות
     platforms = this.physics.add.staticGroup();
-    platforms.add(this.add.rectangle(400, 585, 800, 30, 0x666666)); // רצפה
-    this.physics.add.existing(platforms.getChildren()[0], true);
-    
-    platforms.add(this.add.rectangle(600, 400, 200, 20, 0x666666));
-    this.physics.add.existing(platforms.getChildren()[1], true);
-
-    // סולם (מלבן חום)
     ladders = this.physics.add.staticGroup();
-    let ladder = this.add.rectangle(200, 440, 40, 260, 0x8B4513);
-    this.physics.add.existing(ladder, true);
-    ladders.add(ladder);
-
-    // שחקן - פינגווין (מלבן כחול-לבן)
-    player = this.add.rectangle(100, 500, 30, 40, 0xffffff);
-    this.physics.add.existing(player);
-    player.body.setCollideWorldBounds(true);
-
-    // פינגווין מעודד (ריבוע קטן שקופץ בצד)
-    cheerer = this.add.rectangle(50, 550, 20, 20, 0xffff00);
-
-    // כוכבים (ריבועים צהובים קטנים)
+    monkeys = this.physics.add.group();
     stars = this.physics.add.group();
-    for (let i = 0; i < 5; i++) {
-        let s = this.add.rectangle(150 + (i * 120), 100, 15, 15, 0xffff00);
-        this.physics.add.existing(s);
-        stars.add(s);
+
+    // רצפה
+    createPlatform(400, 585, 800, 30, 0x2e7d32); 
+
+    // עצים (פלטפורמות קפיצה)
+    createTree(600, 450, this);
+    createTree(300, 300, this);
+
+    // סולם
+    let ladderG = this.add.graphics();
+    ladderG.fillStyle(0x795548);
+    ladderG.fillRect(0, 0, 40, 200);
+    ladderG.lineStyle(2, 0x4e342e);
+    for(let i=0; i<200; i+=20) ladderG.strokeLineShape(new Phaser.Geom.Line(0, i, 40, i));
+    ladderG.generateTexture('ladderTex', 40, 200);
+    ladders.create(150, 480, 'ladderTex');
+
+    // יצירת השחקן (פינגווין)
+    drawPenguin(this, 'penguinTex', 0x000000); // פינגווין שחור
+    drawPenguin(this, 'cheerTex', 0x333333);  // פינגווין מעודד אפור
+    
+    player = this.physics.add.sprite(100, 500, 'penguinTex');
+    player.setCollideWorldBounds(true);
+
+    // פינגווין מעודד בצד
+    let cheerleader = this.add.sprite(50, 550, 'cheerTex').setScale(0.8);
+    this.tweens.add({ targets: cheerleader, y: 540, duration: 400, yoyo: true, repeat: -1 });
+
+    // יצירת קופים
+    drawMonkey(this);
+    createMonkey(500, 530);
+    createMonkey(300, 250);
+
+    // כוכבים
+    drawStar(this);
+    for (let i = 0; i < 6; i++) {
+        stars.create(200 + (i * 100), 100, 'starTex');
     }
 
-    // דלת (מלבן ירוק)
-    door = this.add.rectangle(750, 535, 40, 70, 0x00ff00);
+    // דלת
+    door = this.add.rectangle(750, 535, 50, 80, 0x5d4037);
     this.physics.add.existing(door, true);
     door.visible = false;
 
-    // מקשים
+    // הגדרות שליטה והתנגשות
     cursors = this.input.keyboard.createCursorKeys();
-
-    // התנגשויות
     this.physics.add.collider(player, platforms);
+    this.physics.add.collider(monkeys, platforms);
     this.physics.add.collider(stars, platforms);
-    
-    // איסוף כוכבים
-    this.physics.add.overlap(player, stars, (p, s) => {
-        s.destroy();
-        score++;
-        if (score >= 5) {
-            door.visible = true;
-            console.log("Door Open!");
-        }
-    }, null, this);
 
-    // מעבר שלב
-    this.physics.add.overlap(player, door, () => {
-        if (door.visible) {
-            level++;
-            alert("עברת לשלב " + level + "!");
-            resetLevel();
-        }
-    }, null, this);
+    this.physics.add.overlap(player, stars, (p, s) => { s.destroy(); score++; if(score>=6) door.visible=true; }, null, this);
+    this.physics.add.overlap(player, monkeys, () => { alert("הקוף תפס אותך!"); location.reload(); }, null, this);
+    this.physics.add.overlap(player, door, () => { if(door.visible) { alert("ניצחת! עוברים לשלב הבא"); location.reload(); } }, null, this);
 }
 
 function update() {
     player.body.allowGravity = true;
+    if (cursors.left.isDown) { player.setVelocityX(-180); player.setFlipX(true); }
+    else if (cursors.right.isDown) { player.setVelocityX(180); player.setFlipX(false); }
+    else player.setVelocityX(0);
 
-    // תנועה
-    if (cursors.left.isDown) player.body.setVelocityX(-180);
-    else if (cursors.right.isDown) player.body.setVelocityX(180);
-    else player.body.setVelocityX(0);
+    if (cursors.up.isDown && player.body.touching.down) player.setVelocityY(-400);
 
-    // קפיצה
-    if (cursors.up.isDown && player.body.touching.down) {
-        player.body.setVelocityY(-350);
-    }
-
-    // טיפוס בסולם
+    // טיפוס
     this.physics.overlap(player, ladders, () => {
-        if (cursors.up.isDown) {
-            player.body.setVelocityY(-150);
-            player.body.allowGravity = false;
-        }
+        if (cursors.up.isDown) { player.setVelocityY(-150); player.body.allowGravity = false; }
     });
 
-    // אנימציה פשוטה למעודד
-    cheerer.y = 550 + Math.sin(this.time.now / 100) * 10;
+    // תנועת קופים
+    monkeys.children.iterate(m => {
+        if (m.body.blocked.left || m.body.blocked.right) m.setData('dir', m.getData('dir') * -1);
+        m.setVelocityX(80 * m.getData('dir'));
+    });
 }
 
-function resetLevel() {
-    // כאן אפשר לשנות מיקומי פלטפורמות לשלב 2
-    player.x = 100;
-    player.y = 500;
-    score = 0;
-    door.visible = false;
-    // (אפשר להוסיף כאן לוגיקה ליצירת כוכבים מחדש)
+// פונקציות עזר לציור
+function createPlatform(x, y, w, h, color) {
+    let g = game.scene.scenes[0].add.rectangle(x, y, w, h, color);
+    game.scene.scenes[0].physics.add.existing(g, true);
+    platforms.add(g);
+}
+
+function createTree(x, y, scene) {
+    scene.add.rectangle(x, y + 50, 20, 100, 0x5d4037); // גזע
+    let leaf = scene.add.circle(x, y, 50, 0x228B22); // עלים
+    scene.physics.add.existing(leaf, true);
+    platforms.add(leaf);
+}
+
+function drawPenguin(scene, key, color) {
+    let g = scene.make.graphics();
+    g.fillStyle(color);
+    g.fillEllipse(15, 25, 30, 40); // גוף
+    g.fillStyle(0xffffff);
+    g.fillEllipse(15, 28, 20, 30); // בטן לבנה
+    g.fillStyle(0x000000);
+    g.fillCircle(10, 15, 3); g.fillCircle(20, 15, 3); // עיניים
+    g.fillStyle(0xffa500);
+    g.fillTriangle(12, 18, 18, 18, 15, 25); // מקור
+    g.generateTexture(key, 30, 50);
+}
+
+function drawMonkey(scene) {
+    let g = scene.make.graphics();
+    g.fillStyle(0x795548);
+    g.fillCircle(15, 15, 12); // ראש
+    g.fillCircle(15, 35, 15); // גוף
+    g.fillCircle(5, 10, 5); g.fillCircle(25, 10, 5); // אוזניים
+    g.fillStyle(0xffccbc);
+    g.fillCircle(15, 18, 8); // פנים
+    g.generateTexture('monkeyTex', 30, 50);
+}
+
+function drawStar(scene) {
+    let g = scene.make.graphics();
+    g.fillStyle(0xffff00);
+    g.fillCircle(10, 10, 8);
+    g.generateTexture('starTex', 20, 20);
+}
+
+function createMonkey(x, y) {
+    let m = monkeys.create(x, y, 'monkeyTex');
+    m.setCollideWorldBounds(true);
+    m.setData('dir', 1);
 }
 </script>
 </body>
