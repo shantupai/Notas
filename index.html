@@ -2,11 +2,136 @@
 <html lang="he">
 <head>
     <meta charset="UTF-8">
-    <title>משחק הפינגווין והחייזרים</title>
-    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-ce.min.js"></script>
-    <style> body { margin: 0; display: flex; justify-content: center; background: #222; } </style>
+    <title>פינגווין נגד חייזרים</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
+    <style>
+        body { margin: 0; background: #000; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
+        canvas { border: 2px solid #fff; }
+    </style>
 </head>
 <body>
-    <script src="game.js"></script>
+
+<script>
+const config = {
+    type: Phaser.AUTO,
+    width: 800,
+    height: 600,
+    physics: {
+        default: 'arcade',
+        arcade: { gravity: { y: 600 }, debug: false }
+    },
+    scene: { preload: preload, create: create, update: update }
+};
+
+let player, stars, platforms, cursors, ladders, door, cheerer, aliens;
+let score = 0;
+let level = 1;
+
+const game = new Phaser.Game(config);
+
+function preload() {
+    // אין צורך בטעינת תמונות חיצוניות - נשתמש בגרפיקה מובנית
+}
+
+function create() {
+    // רקע
+    this.add.rectangle(400, 300, 800, 600, 0x000033); // שמיים כהים
+
+    // פלטפורמות (מלבנים אפורים)
+    platforms = this.physics.add.staticGroup();
+    platforms.add(this.add.rectangle(400, 585, 800, 30, 0x666666)); // רצפה
+    this.physics.add.existing(platforms.getChildren()[0], true);
+    
+    platforms.add(this.add.rectangle(600, 400, 200, 20, 0x666666));
+    this.physics.add.existing(platforms.getChildren()[1], true);
+
+    // סולם (מלבן חום)
+    ladders = this.physics.add.staticGroup();
+    let ladder = this.add.rectangle(200, 440, 40, 260, 0x8B4513);
+    this.physics.add.existing(ladder, true);
+    ladders.add(ladder);
+
+    // שחקן - פינגווין (מלבן כחול-לבן)
+    player = this.add.rectangle(100, 500, 30, 40, 0xffffff);
+    this.physics.add.existing(player);
+    player.body.setCollideWorldBounds(true);
+
+    // פינגווין מעודד (ריבוע קטן שקופץ בצד)
+    cheerer = this.add.rectangle(50, 550, 20, 20, 0xffff00);
+
+    // כוכבים (ריבועים צהובים קטנים)
+    stars = this.physics.add.group();
+    for (let i = 0; i < 5; i++) {
+        let s = this.add.rectangle(150 + (i * 120), 100, 15, 15, 0xffff00);
+        this.physics.add.existing(s);
+        stars.add(s);
+    }
+
+    // דלת (מלבן ירוק)
+    door = this.add.rectangle(750, 535, 40, 70, 0x00ff00);
+    this.physics.add.existing(door, true);
+    door.visible = false;
+
+    // מקשים
+    cursors = this.input.keyboard.createCursorKeys();
+
+    // התנגשויות
+    this.physics.add.collider(player, platforms);
+    this.physics.add.collider(stars, platforms);
+    
+    // איסוף כוכבים
+    this.physics.add.overlap(player, stars, (p, s) => {
+        s.destroy();
+        score++;
+        if (score >= 5) {
+            door.visible = true;
+            console.log("Door Open!");
+        }
+    }, null, this);
+
+    // מעבר שלב
+    this.physics.add.overlap(player, door, () => {
+        if (door.visible) {
+            level++;
+            alert("עברת לשלב " + level + "!");
+            resetLevel();
+        }
+    }, null, this);
+}
+
+function update() {
+    player.body.allowGravity = true;
+
+    // תנועה
+    if (cursors.left.isDown) player.body.setVelocityX(-180);
+    else if (cursors.right.isDown) player.body.setVelocityX(180);
+    else player.body.setVelocityX(0);
+
+    // קפיצה
+    if (cursors.up.isDown && player.body.touching.down) {
+        player.body.setVelocityY(-350);
+    }
+
+    // טיפוס בסולם
+    this.physics.overlap(player, ladders, () => {
+        if (cursors.up.isDown) {
+            player.body.setVelocityY(-150);
+            player.body.allowGravity = false;
+        }
+    });
+
+    // אנימציה פשוטה למעודד
+    cheerer.y = 550 + Math.sin(this.time.now / 100) * 10;
+}
+
+function resetLevel() {
+    // כאן אפשר לשנות מיקומי פלטפורמות לשלב 2
+    player.x = 100;
+    player.y = 500;
+    score = 0;
+    door.visible = false;
+    // (אפשר להוסיף כאן לוגיקה ליצירת כוכבים מחדש)
+}
+</script>
 </body>
 </html>
