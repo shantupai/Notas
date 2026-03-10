@@ -2,17 +2,15 @@
 <html lang="he">
 <head>
     <meta charset="UTF-8">
-    <title>פינגווין, נמר וחייזרים מצחיקים</title>
+    <title>חשבון בחלל - נגישות משופרת</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
     <style>
-        body { margin: 0; background: #222; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: 'Arial', sans-serif; }
+        body { margin: 0; background: #222; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: sans-serif; }
         canvas { border: 4px solid #fff; border-radius: 10px; }
         #math-ui {
-            position: absolute;
-            top: 40%; left: 50%;
-            transform: translate(-50%, -50%);
-            background: white; padding: 20px; border-radius: 15px;
-            text-align: center; display: none; border: 5px solid #9b59b6; z-index: 10;
+            position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%);
+            background: white; padding: 20px; border-radius: 15px; text-align: center;
+            display: none; border: 5px solid #9b59b6; z-index: 10;
         }
         #math-ui input { font-size: 24px; width: 80px; text-align: center; }
     </style>
@@ -41,7 +39,7 @@ const game = new Phaser.Game(config);
 function preload() {}
 
 function create() {
-    this.add.rectangle(400, 300, 800, 600, 0x2c3e50); // רקע לילה
+    this.add.rectangle(400, 300, 800, 600, 0x1e272e); 
 
     platforms = this.physics.add.staticGroup();
     ladders = this.physics.add.staticGroup();
@@ -50,23 +48,37 @@ function create() {
 
     drawPenguin(this); drawTiger(this); drawAlien(this); drawFish(this);
 
-    // מבנה השלב
-    createPlatform(400, 585, 800, 30, 0x7f8c8d); 
-    createPlatform(200, 450, 200, 20, 0x95a5a6);
-    createPlatform(600, 350, 200, 20, 0x95a5a6);
-    createPlatform(400, 200, 200, 20, 0x95a5a6);
-    drawLadder(this, 400, 435); drawLadder(this, 150, 250);
+    // --- בניית השלב - עכשיו הרבה יותר קל לטפס! ---
+    createPlatform(400, 585, 800, 30, 0x485460); // רצפה
+    
+    // קומה 1
+    createPlatform(200, 450, 250, 20, 0x576574);
+    drawLadder(this, 100, 510, 160); // סולם מהרצפה לקומה 1
+
+    // קומה 2
+    createPlatform(600, 320, 250, 20, 0x576574);
+    drawLadder(this, 300, 380, 150); // סולם מקומה 1 לקומה 2
+
+    // קומה 3 (לדלת)
+    createPlatform(300, 180, 200, 20, 0x576574);
+    drawLadder(this, 500, 250, 150); // סולם מקומה 2 לקומה 3
+    
+    // פלטפורמה סופית ליד הדלת
+    createPlatform(750, 150, 100, 20, 0x576574);
+    drawLadder(this, 200, 180, 50); // סולם קטן
 
     // שחקנים
     player1 = this.physics.add.sprite(50, 500, 'penguinTex').setCollideWorldBounds(true);
-    player2 = this.physics.add.sprite(120, 500, 'tigerTex').setCollideWorldBounds(true);
+    player2 = this.physics.add.sprite(150, 500, 'tigerTex').setCollideWorldBounds(true);
 
-    // חייזרים (הפעם הם רק מציקים)
-    createAlien(350, 500); createAlien(600, 300);
+    // חייזרים
+    createAlien(400, 530); createAlien(600, 280);
 
-    spawnFish([{x:200,y:400}, {x:600,y:300}, {x:400,y:150}, {x:750,y:500}]);
+    // דגים במיקומים נוחים (ליד הקצוות של הפלטפורמות)
+    spawnFish([{x:250,y:400}, {x:550,y:280}, {x:350,y:140}, {x:750,y:520}]);
 
-    door = this.add.rectangle(750, 100, 50, 80, 0xf1c40f).setAlpha(0.2);
+    // דלת
+    door = this.add.rectangle(750, 100, 50, 80, 0x2ecc71).setAlpha(0.2);
     this.physics.add.existing(door, true);
 
     cursors = this.input.keyboard.createCursorKeys();
@@ -74,16 +86,12 @@ function create() {
 
     this.physics.add.collider([player1, player2, aliens], platforms);
     
-    // איסוף דג (חשבון)
     this.physics.add.overlap([player1, player2], fishGroup, (p, f) => {
         if (!isMathActive) startMathQuestion(f);
     }, null, this);
 
-    // תגובה מצחיקה למגע עם חייזר
-    this.physics.add.overlap([player1, player2], aliens, (player, alien) => {
-        if (!player.isFunny) {
-            makeFunnyReaction(this, player);
-        }
+    this.physics.add.overlap([player1, player2], aliens, (p, a) => {
+        if (!p.isFunny) makeFunnyReaction(this, p);
     }, null, this);
 
     document.getElementById('answer-input').addEventListener('keydown', (e) => {
@@ -94,50 +102,41 @@ function create() {
 function update() {
     if (isMathActive) { player1.setVelocity(0); player2.setVelocity(0); return; }
 
-    // תנועה שחקן 1
-    if (cursors.left.isDown) { player1.setVelocityX(-200); player1.setFlipX(true); }
-    else if (cursors.right.isDown) { player1.setVelocityX(200); player1.setFlipX(false); }
-    else player1.setVelocityX(0);
-    if (cursors.up.isDown && player1.body.touching.down) player1.setVelocityY(-450);
+    // לוגיקת טיפוס וניקוי גרביטציה
+    player1.body.allowGravity = true;
+    player2.body.allowGravity = true;
 
-    // תנועה שחקן 2
-    if (keys.A.isDown) { player2.setVelocityX(-200); player2.setFlipX(true); }
-    else if (keys.D.isDown) { player2.setVelocityX(200); player2.setFlipX(false); }
-    else player2.setVelocityX(0);
-    if (keys.W.isDown && player2.body.touching.down) player2.setVelocityY(-450);
+    handleMovement(player1, cursors.left, cursors.right, cursors.up);
+    handleMovement(player2, keys.A, keys.D, keys.W);
 
+    // תנועת חייזרים
     aliens.children.iterate(a => {
         if (a.body.blocked.left || a.x <= 20) a.setVelocityX(120);
         else if (a.body.blocked.right || a.x >= 780) a.setVelocityX(-120);
     });
 }
 
-function makeFunnyReaction(scene, player) {
-    player.isFunny = true;
-    const originalScale = player.scale;
-    const messages = ["אופסי!", "מה זה?!", "חחחח!", "אני בלון!", "הצילו!"];
-    
-    // בחירת אפקט אקראי: ענק או קטן
-    const newScale = Math.random() > 0.5 ? 2.5 : 0.4;
-    player.setScale(newScale);
-    player.setTint(Math.random() * 0xffffff); // צבע אקראי
+function handleMovement(player, leftKey, rightKey, upKey) {
+    if (leftKey.isDown) { player.setVelocityX(-200); player.setFlipX(true); }
+    else if (rightKey.isDown) { player.setVelocityX(200); player.setFlipX(false); }
+    else player.setVelocityX(0);
 
-    // בועת טקסט מעל הראש
-    let txt = scene.add.text(player.x, player.y - 50, messages[Math.floor(Math.random()*messages.length)], 
-        { fontSize: '20px', fill: '#fff', backgroundColor: '#000' });
-    
-    scene.time.addEvent({
-        delay: 3000,
-        callback: () => {
-            player.setScale(1);
-            player.clearTint();
-            player.isFunny = false;
-            txt.destroy();
+    // בדיקת טיפוס על סולם
+    game.scene.scenes[0].physics.overlap(player, ladders, () => {
+        if (upKey.isDown) {
+            player.setVelocityY(-180);
+            player.body.allowGravity = false;
         }
     });
 
-    // הטקסט עוקב אחרי השחקן
-    scene.events.on('update', () => { if(txt) { txt.x = player.x - 20; txt.y = player.y - 60; } });
+    if (upKey.isDown && player.body.touching.down) player.setVelocityY(-450);
+}
+
+function makeFunnyReaction(scene, player) {
+    player.isFunny = true;
+    player.setScale(Math.random() > 0.5 ? 2 : 0.5);
+    player.setTint(Math.random() * 0xffffff);
+    scene.time.addEvent({ delay: 3000, callback: () => { player.setScale(1); player.clearTint(); player.isFunny = false; }});
 }
 
 function startMathQuestion(fish) {
@@ -156,25 +155,10 @@ function checkAnswer() {
         document.getElementById('math-ui').style.display = 'none';
         isMathActive = false; currentFish.destroy();
         score++; if (score >= 4) door.setAlpha(1);
-    } else {
-        alert("נסה שוב!");
     }
 }
 
-// --- גרפיקה ---
-function drawAlien(s) {
-    let g = s.make.graphics();
-    g.fillStyle(0x00ff00); g.fillCircle(20, 20, 15); // חייזר ירוק עגול
-    g.fillStyle(0xffffff); g.fillCircle(12, 15, 5); g.fillCircle(28, 15, 5);
-    g.fillStyle(0x000000); g.fillCircle(12, 15, 2); g.fillCircle(28, 15, 2);
-    g.generateTexture('alienTex', 40, 40);
-}
-
-function createAlien(x, y) {
-    let a = aliens.create(x, y, 'alienTex');
-    a.setCollideWorldBounds(true); a.setVelocityX(120);
-}
-
+// --- ציור דמויות ---
 function drawPenguin(s) {
     let g = s.make.graphics();
     g.fillStyle(0x000000); g.fillEllipse(15, 25, 30, 40);
@@ -182,40 +166,43 @@ function drawPenguin(s) {
     g.fillStyle(0xffa500); g.fillTriangle(12, 18, 18, 18, 15, 25);
     g.generateTexture('penguinTex', 30, 50);
 }
-
 function drawTiger(s) {
     let g = s.make.graphics();
     g.fillStyle(0xffa500); g.fillEllipse(15, 25, 30, 40);
     g.fillStyle(0x000000); g.fillRect(5, 15, 10, 2); g.fillRect(20, 25, 10, 2);
     g.generateTexture('tigerTex', 30, 50);
 }
-
+function drawAlien(s) {
+    let g = s.make.graphics();
+    g.fillStyle(0x00ff00); g.fillCircle(20, 20, 15);
+    g.generateTexture('alienTex', 40, 40);
+}
 function drawFish(s) {
     let g = s.make.graphics();
     g.fillStyle(0x3498db); g.fillEllipse(15, 10, 25, 15);
     g.fillTriangle(0, 5, 0, 15, 10, 10);
     g.generateTexture('fishTex', 30, 20);
 }
-
-function drawLadder(scene, x, y) {
+function drawLadder(scene, x, y, height) {
     let g = scene.add.graphics();
-    g.fillStyle(0x795548); g.fillRect(0, 0, 40, 150);
-    for(let i=0; i<150; i+=25) { g.fillStyle(0x4e342e); g.fillRect(0, i, 40, 5); }
-    g.generateTexture('ladder'+x+y, 40, 150);
-    ladders.create(x, y, 'ladder'+x+y);
+    g.fillStyle(0xcd853f); g.fillRect(0, 0, 40, height);
+    for(let i=0; i<height; i+=20) { g.fillStyle(0x8b4513); g.fillRect(0, i, 40, 4); }
+    let key = 'lad' + x + y + height;
+    g.generateTexture(key, 40, height);
+    ladders.create(x, y, key);
+    g.destroy();
 }
-
 function createPlatform(x, y, w, h, color) {
     let g = game.scene.scenes[0].add.rectangle(x, y, w, h, color);
     game.scene.scenes[0].physics.add.existing(g, true);
     platforms.add(g);
 }
-
 function spawnFish(list) {
-    list.forEach(p => {
-        let f = fishGroup.create(p.x, p.y, 'fishTex');
-        f.body.allowGravity = false;
-    });
+    list.forEach(p => { let f = fishGroup.create(p.x, p.y, 'fishTex'); f.body.allowGravity = false; });
+}
+function createAlien(x, y) {
+    let a = aliens.create(x, y, 'alienTex');
+    a.setCollideWorldBounds(true); a.setVelocityX(120);
 }
 </script>
 </body>
