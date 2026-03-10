@@ -1,112 +1,12 @@
 <!DOCTYPE html>
-<html lang="he" dir="rtl">
+<html lang="he">
 <head>
     <meta charset="UTF-8">
-    <title>הנוטאים - גרסת הכפיל האוטומטי 2026</title>
-    <style>
-        body { margin: 0; background: #020617; overflow: hidden; font-family: sans-serif; }
-        canvas { display: block; margin: 0 auto; background: #0b0f19; border: 3px solid #334155; }
-        #ui { position: absolute; top: 10px; width: 100%; display: flex; justify-content: space-around; color: white; font-size: 20px; font-weight: bold; pointer-events: none; }
-        .hint { position: absolute; bottom: 10px; width: 100%; text-align: center; color: #94a3b8; }
-    </style>
+    <title>משחק הפינגווין והחייזרים</title>
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-ce.min.js"></script>
+    <style> body { margin: 0; display: flex; justify-content: center; background: #222; } </style>
 </head>
 <body>
-    <div id="ui">
-        <div>✨ כוכבים: <span id="points">0</span></div>
-        <div style="color: #ff4444;">🤖 הכפיל האדום פועל!</div>
-    </div>
-    <div class="hint">חצים לזוז | הריבוע האדום אוסף הכל לבד!</div>
-    <canvas id="game"></canvas>
-
-<script>
-    const canvas = document.getElementById('game');
-    const ctx = canvas.getContext('2d');
-    canvas.width = 1000; canvas.height = 500;
-
-    let scoreValue = 0;
-    // שחקן (כחול)
-    let hero = { x: 100, y: 400, w: 30, h: 30, xv: 0, yv: 0, jumps: 0 };
-    // כפיל (אדום) - הוא כבר פה!
-    let helper = { x: 500, y: 100, w: 20, h: 20 };
-    
-    let platforms = [
-        { x: 0, y: 470, w: 1000, h: 30 }, // רצפה
-        { x: 200, y: 350, w: 150, h: 15 },
-        { x: 500, y: 250, w: 150, h: 15 }
-    ];
-    let barriers = [{ x: 400, y: 100, w: 40, h: 300 }]; // קיר לטיפוס
-
-    let gems = [];
-    for(let i=0; i<10; i++) {
-        gems.push({ x: Math.random()*900+50, y: Math.random()*350+50, active: true });
-    }
-
-    let inputKeys = {};
-    window.onkeydown = e => inputKeys[e.code] = true;
-    window.onkeyup = e => inputKeys[e.code] = false;
-
-    function runEngine() {
-        // תנועת שחקן
-        if(inputKeys.ArrowRight) hero.xv = 6;
-        else if(inputKeys.ArrowLeft) hero.xv = -6;
-        else hero.xv *= 0.8;
-
-        // בדיקת קיר
-        let sideWall = false;
-        barriers.forEach(b => {
-            if(hero.x + hero.w + 5 > b.x && hero.x - 5 < b.x + b.w && hero.y + hero.h > b.y && hero.y < b.y + b.h) {
-                sideWall = true;
-                hero.yv = 1.5;
-            }
-        });
-
-        if(!sideWall) hero.yv += 0.6; 
-        hero.x += hero.xv; hero.y += hero.yv;
-
-        // התנגשויות רצפה
-        platforms.forEach(p => {
-            if(hero.x < p.x+p.w && hero.x+hero.w > p.x && hero.y+hero.h > p.y && hero.y+hero.h < p.y+p.h+10 && hero.yv >= 0) {
-                hero.y = p.y - hero.h; hero.yv = 0; hero.jumps = 0;
-            }
-        });
-
-        if((inputKeys.Space || inputKeys.ArrowUp) && !hero.lock) {
-            if(sideWall || hero.jumps < 2) {
-                hero.yv = -12; hero.jumps++; hero.lock = true;
-            }
-        }
-        if(!inputKeys.Space && !inputKeys.ArrowUp) hero.lock = false;
-
-        // בינה מלאכותית של הכפיל האדום
-        let targetGem = gems.find(g => g.active);
-        if(targetGem) {
-            let dx = targetGem.x - helper.x;
-            let dy = targetGem.y - helper.y;
-            let d = Math.sqrt(dx*dx + dy*dy);
-            helper.x += (dx/d) * 5;
-            helper.y += (dy/d) * 5;
-            if(d < 15) { targetGem.active = false; scoreValue += 50; }
-        }
-
-        // ציור
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = "#1e293b"; platforms.forEach(p => ctx.fillRect(p.x, p.y, p.w, p.h));
-        ctx.fillStyle = "#334155"; barriers.forEach(b => ctx.fillRect(b.x, b.y, b.w, b.h));
-        
-        ctx.fillStyle = "#fbbf24"; // כוכבים
-        gems.forEach(g => { if(g.active) { ctx.beginPath(); ctx.arc(g.x, g.y, 8, 0, 7); ctx.fill(); }});
-
-        ctx.fillStyle = "#ff4444"; // כפיל
-        ctx.fillRect(helper.x, helper.y, helper.w, helper.h);
-
-        ctx.fillStyle = "#38bdf8"; // שחקן
-        ctx.fillRect(hero.x, hero.y, hero.w, hero.h);
-
-        document.getElementById('points').innerText = scoreValue;
-        requestAnimationFrame(runEngine);
-    }
-
-    runEngine();
-</script>
+    <script src="game.js"></script>
 </body>
 </html>
