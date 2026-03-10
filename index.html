@@ -2,191 +2,177 @@
 <html lang="he">
 <head>
     <meta charset="UTF-8">
-    <title>חשבון עם פינגווין וחייזרים</title>
+    <title>פינגווין, נמר וחייזרים מצחיקים</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
     <style>
-        body { margin: 0; background: #222; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: Arial, sans-serif; }
+        body { margin: 0; background: #222; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: 'Arial', sans-serif; }
         canvas { border: 4px solid #fff; border-radius: 10px; }
         #math-ui {
             position: absolute;
-            top: 50%;
-            left: 50%;
+            top: 40%; left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(255, 255, 255, 0.95);
-            padding: 20px;
-            border-radius: 15px;
-            text-align: center;
-            display: none;
-            border: 5px solid #3498db;
-            z-index: 10;
+            background: white; padding: 20px; border-radius: 15px;
+            text-align: center; display: none; border: 5px solid #9b59b6; z-index: 10;
         }
-        #math-ui h2 { margin: 0 0 10px 0; color: #333; }
         #math-ui input { font-size: 24px; width: 80px; text-align: center; }
     </style>
 </head>
 <body>
 
 <div id="math-ui">
-    <h2 id="question">כמה זה 1 + 1?</h2>
+    <h2 id="question">?</h2>
     <input type="number" id="answer-input" />
-    <p>הקש תשובה ולחץ Enter</p>
+    <p>הקש תשובה ו-Enter</p>
 </div>
 
 <script>
 const config = {
     type: Phaser.AUTO,
-    width: 800,
-    height: 600,
-    physics: {
-        default: 'arcade',
-        arcade: { gravity: { y: 800 }, debug: false }
-    },
+    width: 800, height: 600,
+    physics: { default: 'arcade', arcade: { gravity: { y: 800 }, debug: false } },
     scene: { preload: preload, create: create, update: update }
 };
 
 let player1, player2, fishGroup, platforms, aliens, cursors, keys, ladders, door;
-let score = 0, currentLevel = 1, isMathActive = false, currentFish = null;
-let num1, num2, correctAnswer;
+let score = 0, isMathActive = false, currentFish = null, correctAnswer;
 
 const game = new Phaser.Game(config);
 
 function preload() {}
 
 function create() {
-    this.add.rectangle(400, 300, 800, 600, 0x1a1a2e); // רקע חלל כהה
+    this.add.rectangle(400, 300, 800, 600, 0x2c3e50); // רקע לילה
 
     platforms = this.physics.add.staticGroup();
     ladders = this.physics.add.staticGroup();
     aliens = this.physics.add.group();
     fishGroup = this.physics.add.group();
 
-    drawPenguin(this);
-    drawTiger(this);
-    drawAlien(this);
-    drawFish(this);
+    drawPenguin(this); drawTiger(this); drawAlien(this); drawFish(this);
 
-    // יצירת עולם
-    createPlatform(400, 585, 800, 30, 0x444444); // רצפה
-    createPlatform(200, 450, 200, 20, 0x34495e);
-    createPlatform(600, 350, 200, 20, 0x34495e);
-    createPlatform(300, 200, 200, 20, 0x34495e);
-    
-    // סולמות
-    drawLadder(this, 450, 435);
-    drawLadder(this, 100, 250);
+    // מבנה השלב
+    createPlatform(400, 585, 800, 30, 0x7f8c8d); 
+    createPlatform(200, 450, 200, 20, 0x95a5a6);
+    createPlatform(600, 350, 200, 20, 0x95a5a6);
+    createPlatform(400, 200, 200, 20, 0x95a5a6);
+    drawLadder(this, 400, 435); drawLadder(this, 150, 250);
 
     // שחקנים
     player1 = this.physics.add.sprite(50, 500, 'penguinTex').setCollideWorldBounds(true);
-    player2 = this.physics.add.sprite(100, 500, 'tigerTex').setCollideWorldBounds(true);
+    player2 = this.physics.add.sprite(120, 500, 'tigerTex').setCollideWorldBounds(true);
 
-    // חייזרים
-    createAlien(400, 500);
-    createAlien(600, 300);
+    // חייזרים (הפעם הם רק מציקים)
+    createAlien(350, 500); createAlien(600, 300);
 
-    // דגים
-    spawnFish([{x:200,y:400}, {x:600,y:300}, {x:300,y:150}, {x:750,y:500}]);
+    spawnFish([{x:200,y:400}, {x:600,y:300}, {x:400,y:150}, {x:750,y:500}]);
 
-    // דלת
-    door = this.add.rectangle(750, 100, 50, 80, 0x00ff00).setAlpha(0.3);
+    door = this.add.rectangle(750, 100, 50, 80, 0xf1c40f).setAlpha(0.2);
     this.physics.add.existing(door, true);
 
     cursors = this.input.keyboard.createCursorKeys();
     keys = this.input.keyboard.addKeys('W,A,D');
 
-    // התנגשויות
     this.physics.add.collider([player1, player2, aliens], platforms);
     
-    // נגיעה בדג - פתיחת שאלה
+    // איסוף דג (חשבון)
     this.physics.add.overlap([player1, player2], fishGroup, (p, f) => {
-        if (!isMathActive) {
-            startMathQuestion(f);
+        if (!isMathActive) startMathQuestion(f);
+    }, null, this);
+
+    // תגובה מצחיקה למגע עם חייזר
+    this.physics.add.overlap([player1, player2], aliens, (player, alien) => {
+        if (!player.isFunny) {
+            makeFunnyReaction(this, player);
         }
     }, null, this);
 
-    // התנגשות בחייזר - איפוס שלב
-    this.physics.add.overlap([player1, player2], aliens, () => {
-        alert("החייזר תפס אותך!");
-        location.reload();
-    }, null, this);
-
-    // מאזין למקלדת עבור ה-UI של החשבון
     document.getElementById('answer-input').addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-            checkAnswer();
-        }
+        if (e.key === 'Enter') checkAnswer();
     });
 }
 
 function update() {
-    if (isMathActive) {
-        player1.setVelocity(0);
-        player2.setVelocity(0);
-        return;
-    }
+    if (isMathActive) { player1.setVelocity(0); player2.setVelocity(0); return; }
 
-    // שחקן 1
-    if (cursors.left.isDown) player1.setVelocityX(-200);
-    else if (cursors.right.isDown) player1.setVelocityX(200);
+    // תנועה שחקן 1
+    if (cursors.left.isDown) { player1.setVelocityX(-200); player1.setFlipX(true); }
+    else if (cursors.right.isDown) { player1.setVelocityX(200); player1.setFlipX(false); }
     else player1.setVelocityX(0);
     if (cursors.up.isDown && player1.body.touching.down) player1.setVelocityY(-450);
 
-    // שחקן 2
-    if (keys.A.isDown) player2.setVelocityX(-200);
-    else if (keys.D.isDown) player2.setVelocityX(200);
+    // תנועה שחקן 2
+    if (keys.A.isDown) { player2.setVelocityX(-200); player2.setFlipX(true); }
+    else if (keys.D.isDown) { player2.setVelocityX(200); player2.setFlipX(false); }
     else player2.setVelocityX(0);
     if (keys.W.isDown && player2.body.touching.down) player2.setVelocityY(-450);
 
-    // תנועת חייזרים
     aliens.children.iterate(a => {
-        if (a.body.blocked.left || a.x <= 10) a.setVelocityX(100);
-        else if (a.body.blocked.right || a.x >= 790) a.setVelocityX(-100);
+        if (a.body.blocked.left || a.x <= 20) a.setVelocityX(120);
+        else if (a.body.blocked.right || a.x >= 780) a.setVelocityX(-120);
     });
 }
 
-function startMathQuestion(fish) {
-    isMathActive = true;
-    currentFish = fish;
+function makeFunnyReaction(scene, player) {
+    player.isFunny = true;
+    const originalScale = player.scale;
+    const messages = ["אופסי!", "מה זה?!", "חחחח!", "אני בלון!", "הצילו!"];
     
-    num1 = Math.floor(Math.random() * 10) + 1;
-    num2 = Math.floor(Math.random() * 10) + 1;
-    correctAnswer = num1 + num2;
+    // בחירת אפקט אקראי: ענק או קטן
+    const newScale = Math.random() > 0.5 ? 2.5 : 0.4;
+    player.setScale(newScale);
+    player.setTint(Math.random() * 0xffffff); // צבע אקראי
 
-    document.getElementById('question').innerText = `כמה זה ${num1} + ${num2}?`;
+    // בועת טקסט מעל הראש
+    let txt = scene.add.text(player.x, player.y - 50, messages[Math.floor(Math.random()*messages.length)], 
+        { fontSize: '20px', fill: '#fff', backgroundColor: '#000' });
+    
+    scene.time.addEvent({
+        delay: 3000,
+        callback: () => {
+            player.setScale(1);
+            player.clearTint();
+            player.isFunny = false;
+            txt.destroy();
+        }
+    });
+
+    // הטקסט עוקב אחרי השחקן
+    scene.events.on('update', () => { if(txt) { txt.x = player.x - 20; txt.y = player.y - 60; } });
+}
+
+function startMathQuestion(fish) {
+    isMathActive = true; currentFish = fish;
+    let n1 = Math.floor(Math.random() * 10) + 1;
+    let n2 = Math.floor(Math.random() * 10) + 1;
+    correctAnswer = n1 + n2;
+    document.getElementById('question').innerText = `כמה זה ${n1} + ${n2}?`;
     document.getElementById('math-ui').style.display = 'block';
     document.getElementById('answer-input').value = '';
     document.getElementById('answer-input').focus();
 }
 
 function checkAnswer() {
-    let userAnswer = parseInt(document.getElementById('answer-input').value);
-    if (userAnswer === correctAnswer) {
+    if (parseInt(document.getElementById('answer-input').value) === correctAnswer) {
         document.getElementById('math-ui').style.display = 'none';
-        isMathActive = false;
-        currentFish.destroy();
-        score++;
-        if (score >= 4) door.setAlpha(1);
+        isMathActive = false; currentFish.destroy();
+        score++; if (score >= 4) door.setAlpha(1);
     } else {
-        alert("טעות! נסה שוב");
-        document.getElementById('answer-input').value = '';
+        alert("נסה שוב!");
     }
 }
 
-// פונקציות גרפיקה
+// --- גרפיקה ---
 function drawAlien(s) {
     let g = s.make.graphics();
-    g.fillStyle(0xa020f0); // סגול
-    g.fillRect(5, 5, 30, 30);
-    g.fillStyle(0xffffff); // עיניים
-    g.fillCircle(12, 15, 4); g.fillCircle(28, 15, 4);
-    g.fillStyle(0x000000);
-    g.fillCircle(12, 15, 2); g.fillCircle(28, 15, 2);
+    g.fillStyle(0x00ff00); g.fillCircle(20, 20, 15); // חייזר ירוק עגול
+    g.fillStyle(0xffffff); g.fillCircle(12, 15, 5); g.fillCircle(28, 15, 5);
+    g.fillStyle(0x000000); g.fillCircle(12, 15, 2); g.fillCircle(28, 15, 2);
     g.generateTexture('alienTex', 40, 40);
 }
 
 function createAlien(x, y) {
     let a = aliens.create(x, y, 'alienTex');
-    a.setCollideWorldBounds(true);
-    a.setVelocityX(100);
+    a.setCollideWorldBounds(true); a.setVelocityX(120);
 }
 
 function drawPenguin(s) {
@@ -215,8 +201,8 @@ function drawLadder(scene, x, y) {
     let g = scene.add.graphics();
     g.fillStyle(0x795548); g.fillRect(0, 0, 40, 150);
     for(let i=0; i<150; i+=25) { g.fillStyle(0x4e342e); g.fillRect(0, i, 40, 5); }
-    g.generateTexture('ladder' + x, 40, 150);
-    ladders.create(x, y, 'ladder' + x);
+    g.generateTexture('ladder'+x+y, 40, 150);
+    ladders.create(x, y, 'ladder'+x+y);
 }
 
 function createPlatform(x, y, w, h, color) {
